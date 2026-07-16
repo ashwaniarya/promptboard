@@ -2,13 +2,13 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-swift build -c release
+swift build -c release --product PromptBoardApp
 
 APP_BUNDLE=dist/PromptBoard.app
 rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_BUNDLE/Contents/MacOS"
 
-cp .build/release/PromptBoard "$APP_BUNDLE/Contents/MacOS/PromptBoard"
+cp .build/release/PromptBoardApp "$APP_BUNDLE/Contents/MacOS/PromptBoard"
 
 cat > "$APP_BUNDLE/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
