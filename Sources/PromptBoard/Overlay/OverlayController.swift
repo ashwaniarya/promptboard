@@ -10,6 +10,12 @@ final class OverlayController {
     init(appState: AppState) {
         self.appState = appState
         appState.requestHide = { [weak self] in self?.hide() }
+        appState.requestFocusEditorTitle = { [weak self] in
+            self?.focusTextField(placeholder: Constants.editorTitlePlaceholder)
+        }
+        appState.requestFocusSearchField = { [weak self] in
+            self?.focusTextField(placeholder: Constants.searchFieldPlaceholder)
+        }
     }
 
     var isVisible: Bool {
@@ -69,11 +75,55 @@ final class OverlayController {
     }
 
     func writeContentSnapshot(to path: String) {
-        guard let contentView = panel?.contentView,
-              let bitmap = contentView.bitmapImageRepForCachingDisplay(in: contentView.bounds) else { return }
+        guard let contentView = panel?.contentView else {
+            NSLog("%@", "PromptBoardDebug snapshot: no content view")
+            return
+        }
+        guard let bitmap = contentView.bitmapImageRepForCachingDisplay(in: contentView.bounds) else {
+            NSLog("%@", "PromptBoardDebug snapshot: bitmap rep unavailable for \(contentView.bounds)")
+            return
+        }
         contentView.cacheDisplay(in: contentView.bounds, to: bitmap)
-        guard let pngData = bitmap.representation(using: .png, properties: [:]) else { return }
-        try? pngData.write(to: URL(fileURLWithPath: path))
+        guard let pngData = bitmap.representation(using: .png, properties: [:]) else {
+            NSLog("%@", "PromptBoardDebug snapshot: png encode failed")
+            return
+        }
+        do {
+            try pngData.write(to: URL(fileURLWithPath: path))
+        } catch {
+            NSLog("%@", "PromptBoardDebug snapshot: write failed: \(error)")
+        }
+    }
+
+    // Retries briefly because the target field's AppKit backing view materializes
+    // a render pass after the SwiftUI state change that requested the focus move
+    private func focusTextField(placeholder: String) {
+        Task { @MainActor [weak self] in
+            for _ in 0..<10 {
+                try? await Task.sleep(for: .milliseconds(40))
+                guard let self, let panel = self.panel else { return }
+                let field = Self.collectTextFields(in: panel.contentView).first {
+                    $0.placeholderString == placeholder
+                        || $0.placeholderAttributedString?.string == placeholder
+                }
+                if let field {
+                    panel.makeFirstResponder(field)
+                    return
+                }
+            }
+        }
+    }
+
+    static func collectTextFields(in view: NSView?) -> [NSTextField] {
+        guard let view else { return [] }
+        var fields: [NSTextField] = []
+        if let field = view as? NSTextField {
+            fields.append(field)
+        }
+        for subview in view.subviews {
+            fields.append(contentsOf: collectTextFields(in: subview))
+        }
+        return fields
     }
 
     private func currentMouseScreen() -> NSScreen {

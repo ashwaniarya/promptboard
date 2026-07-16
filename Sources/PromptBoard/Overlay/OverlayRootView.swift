@@ -25,7 +25,9 @@ struct OverlayRootView: View {
         .ignoresSafeArea()
         .defaultFocus($searchFieldFocused, true)
         .onChange(of: appState.overlaySession) {
-            searchFieldFocused = true
+            if appState.editorMode == nil {
+                searchFieldFocused = true
+            }
         }
     }
 
@@ -34,7 +36,7 @@ struct OverlayRootView: View {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
-                TextField("Search prompts…", text: $appState.searchText)
+                TextField(Constants.searchFieldPlaceholder, text: $appState.searchText)
                     .textFieldStyle(.plain)
                     .font(.title3)
                     .focused($searchFieldFocused)

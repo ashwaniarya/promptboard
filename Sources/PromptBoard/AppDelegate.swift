@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        MainMenu.install()
 
         let dataDirectoryURL = ProcessInfo.processInfo.environment["PROMPTBOARD_DATA_DIR"]
             .map { URL(fileURLWithPath: $0, isDirectory: true) }
@@ -34,7 +35,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         hotKeyManager.register()
 
-        DebugHooks.install(overlayController: overlayController)
+        DebugHooks.install(overlayController: overlayController, appState: appState)
 
         if ProcessInfo.processInfo.environment["PROMPTBOARD_SHOW_ON_LAUNCH"] == "1" {
             overlayController.show()

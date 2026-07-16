@@ -12,10 +12,25 @@ final class AppState {
 
     let store: PromptStore
     var searchText = ""
-    var editorMode: EditorMode?
     private(set) var overlaySession = 0
 
+    // SwiftUI @FocusState writes are ignored while the app is inactive — and a
+    // nonactivating panel's app is never active — so focus moves are delegated
+    // to the AppKit layer through these callbacks
+    var editorMode: EditorMode? {
+        didSet {
+            guard oldValue != editorMode else { return }
+            if editorMode != nil {
+                requestFocusEditorTitle()
+            } else {
+                requestFocusSearchField()
+            }
+        }
+    }
+
     @ObservationIgnored var requestHide: () -> Void = {}
+    @ObservationIgnored var requestFocusEditorTitle: () -> Void = {}
+    @ObservationIgnored var requestFocusSearchField: () -> Void = {}
 
     init(store: PromptStore) {
         self.store = store

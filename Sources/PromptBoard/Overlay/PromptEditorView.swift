@@ -9,7 +9,6 @@ struct PromptEditorView: View {
 
     @State private var title: String
     @State private var content: String
-    @FocusState private var titleFocused: Bool
 
     init(
         mode: AppState.EditorMode,
@@ -37,10 +36,9 @@ struct PromptEditorView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            TextField("Prompt title", text: $title)
+            TextField(Constants.editorTitlePlaceholder, text: $title)
                 .textFieldStyle(.plain)
                 .font(.title2.weight(.semibold))
-                .focused($titleFocused)
 
             Divider()
 
@@ -76,6 +74,5 @@ struct PromptEditorView: View {
         .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(.white.opacity(0.12)))
         .shadow(color: .black.opacity(0.4), radius: 36, y: 12)
         .onExitCommand { onCancel() }
-        .onAppear { titleFocused = true }
     }
 }
