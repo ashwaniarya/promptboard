@@ -6,111 +6,99 @@ import Observation
 public final class PromptStore {
     public private(set) var prompts: [Prompt] = []
 
-    private let directoryURL: URL
-    private let fileURL: URL
+    private let repository: PromptRepository
+    private var lastKnownFileData: Data?
 
     public static var defaultDirectoryURL: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("PromptBoard", isDirectory: true)
+        PromptRepository.defaultDirectoryURL
     }
 
     public init(directoryURL: URL) {
-        self.directoryURL = directoryURL
-        self.fileURL = directoryURL.appendingPathComponent("prompts.json")
-        load()
+        repository = PromptRepository(directoryURL: directoryURL)
+        loadInitial()
     }
 
     @discardableResult
     public func add(title: String, content: String) -> Prompt {
-        let prompt = Prompt(title: normalizedTitle(title), content: content)
-        prompts.append(prompt)
-        persist()
-        return prompt
+        do {
+            let mutation = try repository.add(title: title, content: content)
+            apply(mutation)
+            return mutation.prompt
+        } catch {
+            reportFailure(error)
+            let prompt = Prompt(title: PromptRepository.normalizedTitle(title), content: content)
+            prompts.append(prompt)
+            return prompt
+        }
     }
 
     public func update(id: UUID, title: String, content: String) {
-        guard let index = prompts.firstIndex(where: { $0.id == id }) else { return }
-        prompts[index].title = normalizedTitle(title)
-        prompts[index].content = content
-        prompts[index].updatedAt = Date()
-        persist()
+        do {
+            apply(try repository.update(id: id, title: title, content: content))
+        } catch PromptRepositoryError.promptNotFound {
+        } catch {
+            reportFailure(error)
+            guard let index = prompts.firstIndex(where: { $0.id == id }) else { return }
+            prompts[index].title = PromptRepository.normalizedTitle(title)
+            prompts[index].content = content
+            prompts[index].updatedAt = Date()
+        }
     }
 
     public func delete(id: UUID) {
-        prompts.removeAll { $0.id == id }
-        persist()
-    }
-
-    private func normalizedTitle(_ title: String) -> String {
-        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "Untitled" : trimmed
-    }
-
-    private func load() {
-        guard FileManager.default.fileExists(atPath: fileURL.path) else {
-            seed()
-            return
-        }
         do {
-            let data = try Data(contentsOf: fileURL)
-            prompts = try Self.makeDecoder().decode([Prompt].self, from: data)
+            apply(try repository.delete(id: id))
+        } catch PromptRepositoryError.promptNotFound {
+            prompts.removeAll { $0.id == id }
         } catch {
-            quarantineCorruptFile()
-            seed()
+            reportFailure(error)
+            prompts.removeAll { $0.id == id }
         }
     }
 
-    private func seed() {
-        prompts = SeedPrompts.samples
-        persist()
-    }
-
-    private func quarantineCorruptFile() {
-        let epoch = Int(Date().timeIntervalSince1970)
-        let backupURL = directoryURL.appendingPathComponent("prompts.json.corrupt-\(epoch)")
-        try? FileManager.default.moveItem(at: fileURL, to: backupURL)
-    }
-
-    private func persist() {
+    private func loadInitial() {
         do {
-            try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
-            let data = try Self.makeEncoder().encode(prompts)
-            try data.write(to: fileURL, options: .atomic)
-        } catch {
-            FileHandle.standardError.write(Data("PromptStore persist failed: \(error)\n".utf8))
-        }
-    }
-
-    // Plain .iso8601 truncates to whole seconds, which breaks updatedAt ordering across relaunches
-    private static func makeEncoder() -> JSONEncoder {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        encoder.dateEncodingStrategy = .custom { date, encoder in
-            let formatter = ISO8601DateFormatter()
-            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            var container = encoder.singleValueContainer()
-            try container.encode(formatter.string(from: date))
-        }
-        return encoder
-    }
-
-    private static func makeDecoder() -> JSONDecoder {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .custom { decoder in
-            let container = try decoder.singleValueContainer()
-            let rawDate = try container.decode(String.self)
-            let fractionalFormatter = ISO8601DateFormatter()
-            fractionalFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            let plainFormatter = ISO8601DateFormatter()
-            plainFormatter.formatOptions = [.withInternetDateTime]
-            guard let date = fractionalFormatter.date(from: rawDate) ?? plainFormatter.date(from: rawDate) else {
-                throw DecodingError.dataCorruptedError(
-                    in: container,
-                    debugDescription: "Invalid ISO-8601 date: \(rawDate)"
-                )
+            if let loaded = try repository.loadIfPresent() {
+                applyLoad(loaded)
+            } else {
+                applyLoad(try repository.seedIfMissing(with: SeedPrompts.samples))
             }
-            return date
+        } catch PromptRepositoryError.corruptData {
+            recoverFromCorruptFile()
+        } catch {
+            reportFailure(error)
+            prompts = SeedPrompts.samples
         }
-        return decoder
+    }
+
+    private func recoverFromCorruptFile() {
+        do {
+            let recovered = try repository.withExclusiveLock {
+                if let loaded = try? repository.loadIfPresent() {
+                    return loaded
+                }
+                repository.quarantineDataFile()
+                let fileData = try repository.save(SeedPrompts.samples)
+                return PromptRepository.LoadResult(prompts: SeedPrompts.samples, fileData: fileData)
+            }
+            applyLoad(recovered)
+        } catch {
+            reportFailure(error)
+            prompts = SeedPrompts.samples
+        }
+    }
+
+    private func apply(_ mutation: PromptRepository.Mutation) {
+        prompts = mutation.prompts
+        lastKnownFileData = mutation.fileData
+    }
+
+    private func applyLoad(_ loaded: PromptRepository.LoadResult) {
+        prompts = loaded.prompts
+        lastKnownFileData = loaded.fileData
+    }
+
+    private func reportFailure(_ error: any Error) {
+        FileHandle.standardError.write(Data("PromptStore repository failure: \(error)\n".utf8))
     }
 }
