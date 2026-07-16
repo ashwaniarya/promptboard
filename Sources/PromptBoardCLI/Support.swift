@@ -6,7 +6,7 @@ func runHandlingRepositoryErrors<T>(_ body: () throws -> T) throws -> T {
     do {
         return try body()
     } catch let error as PromptRepositoryError {
-        printToStandardError(message(for: error))
+        printToStandardError(repositoryErrorMessage(for: error))
         throw ExitCode(exitCode(for: error))
     }
 }
@@ -40,7 +40,7 @@ func printToStandardError(_ line: String) {
     FileHandle.standardError.write(Data((line + "\n").utf8))
 }
 
-private func message(for error: PromptRepositoryError) -> String {
+func repositoryErrorMessage(for error: PromptRepositoryError) -> String {
     switch error {
     case .corruptData(let path, _):
         "corrupt prompts file (fix or remove it): \(path)"
