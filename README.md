@@ -15,21 +15,54 @@ Prompts are stored as human-readable JSON in `~/Library/Application Support/Prom
 
 ```bash
 swift build          # compile
-swift test           # unit tests (store, filter, masonry)
-swift run            # dev loop (menu bar icon appears; Ctrl-C to quit)
+swift test           # unit tests (repository, store, filter, masonry)
+swift run PromptBoardApp   # dev loop (menu bar icon appears; Ctrl-C to quit)
 make app             # assemble + ad-hoc sign dist/PromptBoard.app
 open dist/PromptBoard.app
+make install         # build + install the promptboard CLI to ~/.local/bin
 ```
 
 Requires macOS 14+. No Xcode project — pure SwiftPM. For **Launch at Login**, run the bundled `dist/PromptBoard.app` (the toggle is disabled under `swift run`; move the app to `/Applications` for a stable login item).
 
-⚠️ Don't run `swift run` and the bundled app at once — the second instance's hotkey registration fails (logged to console).
+⚠️ Don't run `swift run PromptBoardApp` and the bundled app at once — the second instance's hotkey registration fails (logged to console).
+
+## Agent access (CLI + MCP)
+
+The `promptboard` binary gives scripts and AI agents full CRUD over the same library. The app watches `prompts.json` and reloads external changes live — no relaunch. Conflicts are last-writer-wins per save; an editor open in the overlay keeps its draft until saved.
+
+```
+promptboard list   [--query <q>] [--json]
+promptboard get    <id> [--json]              # raw content on stdout (pipes into pbcopy)
+promptboard add    [--title <t>] (--content <text> | --content-file <path|->)
+promptboard update <id> [--title <t>] [--content <text> | --content-file <path|->]
+promptboard delete <id> [--json]
+promptboard mcp                               # stdio MCP server (tools only)
+```
+
+- Every subcommand accepts `--data-dir <path>` (or `$PROMPTBOARD_DATA_DIR`); ids are UUIDs from `list`.
+- `--content-file -` reads stdin. `update` preserves omitted fields.
+- `--json` prints the canonical store encoding (same shapes and ISO-8601 fractional dates as `prompts.json`). Timestamps are output-only — the store manages them.
+- Exit codes: 0 ok · 1 I/O or lock timeout · 2 not found · 3 corrupt file · 64 usage.
+- The CLI never seeds samples: `list` on a missing file prints `[]` and creates nothing; a corrupt file is an error (exit 3), never silently quarantined. Only the app seeds/recovers.
+
+MCP tools: `list_prompts` (optional `query`), `get_prompt`, `add_prompt` (`title?`, `content`), `update_prompt` (`id`, `title?`/`content?`), `delete_prompt`. Registration:
+
+```bash
+claude mcp add --scope user promptboard -- ~/.local/bin/promptboard mcp   # Claude Code
+```
+
+```toml
+# Codex: ~/.codex/config.toml (absolute path — no ~ expansion)
+[mcp_servers.promptboard]
+command = "/Users/arya/.local/bin/promptboard"
+args = ["mcp"]
+```
 
 ### Dev hooks (env vars)
 
 - `PROMPTBOARD_SHOW_ON_LAUNCH=1` — open the overlay immediately at launch
 - `PROMPTBOARD_DATA_DIR=/path` — use a different prompts.json directory (keeps your real library untouched)
-- `PROMPTBOARD_DEBUG=1` — listen for distributed notifications used for scripted UI verification: `com.arya.PromptBoard.debug.toggle` (toggle overlay), `…debug.newPrompt` (open overlay + blank editor), `…debug.commandKey` (replay a ⌘-key equivalent; object = character, e.g. `"v"`), `…debug.dumpState` (log key window, first responder, and each text field's value/focus), `…debug.snapshot` (write a PNG of the overlay content; object = output path). Post one with:
+- `PROMPTBOARD_DEBUG=1` — listen for distributed notifications used for scripted UI verification: `com.arya.PromptBoard.debug.toggle` (toggle overlay), `…debug.newPrompt` (open overlay + blank editor), `…debug.commandKey` (replay a ⌘-key equivalent; object = character, e.g. `"v"`), `…debug.dumpState` (log key window, first responder, and each text field's value/focus), `…debug.dumpPrompts` (log prompt count + titles), `…debug.snapshot` (write a PNG of the overlay content; object = output path). Post one with:
 
   ```bash
   swift -e 'import Foundation; DistributedNotificationCenter.default().postNotificationName(Notification.Name("com.arya.PromptBoard.debug.dumpState"), object: nil, userInfo: nil, deliverImmediately: true); Thread.sleep(forTimeInterval: 0.3)'
@@ -50,3 +83,4 @@ Requires macOS 14+. No Xcode project — pure SwiftPM. For **Launch at Login**, 
 11. Two-finger scroll through a long grid; columns stay balanced as cards change.
 12. Quit + relaunch → data persists. Hand-corrupt the JSON → app recovers with seeds and leaves a `.corrupt-*` backup.
 13. Bundled app only: Launch at Login toggle flips the checkmark and appears in System Settings → General → Login Items.
+14. `promptboard add --title X --content Y` while the overlay is open → card appears within ~1s, no relaunch; an edit saved in the app shows up in `promptboard list` immediately.
