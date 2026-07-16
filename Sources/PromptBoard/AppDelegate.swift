@@ -17,6 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .map { URL(fileURLWithPath: $0, isDirectory: true) }
             ?? PromptStore.defaultDirectoryURL
         promptStore = PromptStore(directoryURL: dataDirectoryURL)
+        promptStore.startWatchingForExternalChanges()
         appState = AppState(store: promptStore)
         overlayController = OverlayController(appState: appState)
 

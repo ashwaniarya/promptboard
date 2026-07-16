@@ -7,7 +7,9 @@ public final class PromptStore {
     public private(set) var prompts: [Prompt] = []
 
     private let repository: PromptRepository
-    private var lastKnownFileData: Data?
+    private(set) var lastKnownFileData: Data?
+    @ObservationIgnored private var watcher: DirectoryChangeWatcher?
+    @ObservationIgnored private var pendingReloadTask: Task<Void, Never>?
 
     public static var defaultDirectoryURL: URL {
         PromptRepository.defaultDirectoryURL
@@ -53,6 +55,31 @@ public final class PromptStore {
         } catch {
             reportFailure(error)
             prompts.removeAll { $0.id == id }
+        }
+    }
+
+    public func startWatchingForExternalChanges() {
+        guard watcher == nil else { return }
+        try? repository.ensureDirectoryExists()
+        watcher = DirectoryChangeWatcher(directoryURL: repository.directoryURL) { [weak self] in
+            MainActor.assumeIsolated {
+                self?.scheduleReload()
+            }
+        }
+    }
+
+    public func reloadFromDiskIfChanged() {
+        guard let loaded = try? repository.loadIfPresent(),
+              loaded.fileData != lastKnownFileData else { return }
+        applyLoad(loaded)
+    }
+
+    private func scheduleReload() {
+        pendingReloadTask?.cancel()
+        pendingReloadTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled else { return }
+            self?.reloadFromDiskIfChanged()
         }
     }
 

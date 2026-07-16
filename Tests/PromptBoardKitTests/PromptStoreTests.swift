@@ -76,6 +76,50 @@ struct PromptStoreTests {
         #expect(added.title == "Untitled")
     }
 
+    @Test func reloadAppliesExternalRepositoryWrite() throws {
+        let directory = makeTemporaryDirectory()
+        let store = PromptStore(directoryURL: directory)
+        let external = try PromptRepository(directoryURL: directory).add(title: "External", content: "from agent")
+
+        store.reloadFromDiskIfChanged()
+
+        #expect(store.prompts.contains { $0.id == external.prompt.id })
+    }
+
+    @Test func ownWritesAreRecognizedAsCurrentFileState() throws {
+        let directory = makeTemporaryDirectory()
+        let store = PromptStore(directoryURL: directory)
+        store.add(title: "Mine", content: "self write")
+
+        let onDisk = try Data(contentsOf: directory.appendingPathComponent("prompts.json"))
+        #expect(store.lastKnownFileData == onDisk)
+    }
+
+    @Test func updateAfterExternalDeleteIsSilentNoOp() throws {
+        let directory = makeTemporaryDirectory()
+        let store = PromptStore(directoryURL: directory)
+        let added = store.add(title: "Doomed", content: "x")
+        _ = try PromptRepository(directoryURL: directory).delete(id: added.id)
+
+        store.update(id: added.id, title: "Ghost", content: "y")
+        store.reloadFromDiskIfChanged()
+
+        #expect(!store.prompts.contains { $0.id == added.id })
+    }
+
+    @Test func watcherAppliesExternalChangeAutomatically() async throws {
+        let directory = makeTemporaryDirectory()
+        let store = PromptStore(directoryURL: directory)
+        store.startWatchingForExternalChanges()
+
+        let external = try PromptRepository(directoryURL: directory).add(title: "Watched", content: "x")
+
+        for _ in 0..<40 where !store.prompts.contains(where: { $0.id == external.prompt.id }) {
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        #expect(store.prompts.contains { $0.id == external.prompt.id })
+    }
+
     @Test func corruptFileIsQuarantinedAndReseeded() throws {
         let directory = makeTemporaryDirectory()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

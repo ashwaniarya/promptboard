@@ -7,6 +7,7 @@ enum DebugHooks {
     static let newPromptNotification = "com.arya.PromptBoard.debug.newPrompt"
     static let commandKeyNotification = "com.arya.PromptBoard.debug.commandKey"
     static let dumpStateNotification = "com.arya.PromptBoard.debug.dumpState"
+    static let dumpPromptsNotification = "com.arya.PromptBoard.debug.dumpPrompts"
 
     static var isEnabled: Bool {
         ProcessInfo.processInfo.environment["PROMPTBOARD_DEBUG"] == "1"
@@ -28,6 +29,7 @@ enum DebugHooks {
             (newPromptNotification, #selector(DebugHookTarget.handleNewPrompt(_:))),
             (commandKeyNotification, #selector(DebugHookTarget.handleCommandKey(_:))),
             (dumpStateNotification, #selector(DebugHookTarget.handleDumpState(_:))),
+            (dumpPromptsNotification, #selector(DebugHookTarget.handleDumpPrompts(_:))),
         ]
         for (name, selector) in hooks {
             center.addObserver(
@@ -94,6 +96,14 @@ private final class DebugHookTarget: NSObject {
                 "[placeholder=\($0.placeholderString ?? $0.placeholderAttributedString?.string ?? "nil") value=\($0.stringValue) focused=\($0.currentEditor() != nil)]"
             }
             NSLog("%@", "PromptBoardDebug fields: \(fieldSummaries.joined(separator: " "))")
+        }
+    }
+
+    @objc nonisolated func handleDumpPrompts(_ notification: Notification) {
+        MainActor.assumeIsolated {
+            let prompts = appState.store.prompts
+            let titles = prompts.map(\.title).joined(separator: " | ")
+            NSLog("%@", "PromptBoardDebug prompts: count=\(prompts.count) titles=\(titles)")
         }
     }
 
