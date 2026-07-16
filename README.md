@@ -25,6 +25,12 @@ Requires macOS 14+. No Xcode project — pure SwiftPM. For **Launch at Login**, 
 
 ⚠️ Don't run `swift run` and the bundled app at once — the second instance's hotkey registration fails (logged to console).
 
+### Dev hooks (env vars)
+
+- `PROMPTBOARD_SHOW_ON_LAUNCH=1` — open the overlay immediately at launch
+- `PROMPTBOARD_DATA_DIR=/path` — use a different prompts.json directory (keeps your real library untouched)
+- `PROMPTBOARD_DEBUG=1` — listen for distributed notifications `com.arya.PromptBoard.debug.toggle` (toggle overlay) and `…debug.snapshot` (write a PNG of the overlay content to the path passed as the notification object) — used for scripted UI verification
+
 ## Smoke checklist
 
 1. Launch → menu-bar grid icon appears, no Dock icon.

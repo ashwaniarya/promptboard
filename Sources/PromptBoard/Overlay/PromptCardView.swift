@@ -14,7 +14,7 @@ struct PromptCardView: View {
             Text(prompt.title)
                 .font(.headline)
                 .lineLimit(2)
-            Text(prompt.content)
+            Text(prompt.content.trimmingCharacters(in: .whitespacesAndNewlines))
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
                 .lineLimit(12)

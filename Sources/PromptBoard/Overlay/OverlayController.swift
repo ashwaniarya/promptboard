@@ -58,7 +58,6 @@ final class OverlayController {
         // NSPanel defaults to hiding on app deactivation; a nonactivating panel's app is never active
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
-        panel.isFloatingPanel = true
         panel.becomesKeyOnlyIfNeeded = false
         panel.animationBehavior = .none
         panel.appearance = NSAppearance(named: .darkAqua)
@@ -67,6 +66,14 @@ final class OverlayController {
 
         self.panel = panel
         return panel
+    }
+
+    func writeContentSnapshot(to path: String) {
+        guard let contentView = panel?.contentView,
+              let bitmap = contentView.bitmapImageRepForCachingDisplay(in: contentView.bounds) else { return }
+        contentView.cacheDisplay(in: contentView.bounds, to: bitmap)
+        guard let pngData = bitmap.representation(using: .png, properties: [:]) else { return }
+        try? pngData.write(to: URL(fileURLWithPath: path))
     }
 
     private func currentMouseScreen() -> NSScreen {
