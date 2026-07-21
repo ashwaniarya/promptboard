@@ -128,7 +128,10 @@ public struct LibraryRepository: Sendable {
     // library so a partial state can't double up.
     @discardableResult
     public func migrateLegacyIfNeeded() throws -> Bool {
-        try withExclusiveLock {
+        // Unlocked fast path: with no legacy file there is nothing to do, and we must
+        // not create the library dir (a read-only `list` on an empty dir stays inert).
+        guard FileManager.default.fileExists(atPath: legacyDataFileURL.path) else { return false }
+        return try withExclusiveLock {
             guard FileManager.default.fileExists(atPath: legacyDataFileURL.path) else { return false }
             guard existingPromptSlugs().isEmpty else { return false }
 
@@ -449,6 +452,23 @@ extension LibraryRepository {
 
     func folderCreationDate(_ url: URL) -> Date? {
         (try? url.resourceValues(forKeys: [.creationDateKey]))?.creationDate
+    }
+
+    // Reads one supporting file of a skill by id, refusing paths that escape the folder.
+    public func skillFileData(id: UUID, relativePath: String) throws -> Data {
+        guard let found = try findSkillFolder(id: id) else {
+            throw LibraryRepositoryError.skillNotFound(id)
+        }
+        let fileURL = found.url.appendingPathComponent(relativePath)
+        let base = found.url.standardizedFileURL.path
+        guard fileURL.standardizedFileURL.path.hasPrefix(base + "/") else {
+            throw LibraryRepositoryError.invalidSkillSource(path: relativePath)
+        }
+        do {
+            return try Data(contentsOf: fileURL)
+        } catch {
+            throw LibraryRepositoryError.ioFailure(underlying: error)
+        }
     }
 
     // Deterministic id for a skill folder that has no sidecar (e.g. hand-dropped),

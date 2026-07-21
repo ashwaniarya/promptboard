@@ -11,7 +11,9 @@ struct MCP: ParsableCommand {
     @OptionGroup var location: DataDirectoryOptions
 
     func run() throws {
-        MCPStdioServer(repository: location.repository).run()
+        let repository = location.repository
+        _ = try? repository.migrateLegacyIfNeeded()
+        MCPStdioServer(repository: repository).run()
     }
 }
 
@@ -19,10 +21,10 @@ struct MCP: ParsableCommand {
 // because the official Swift SDK needs a newer toolchain than this machine's.
 // Stdout carries protocol frames exclusively — diagnostics must use stderr.
 final class MCPStdioServer {
-    private let repository: PromptRepository
+    private let repository: LibraryRepository
     private let standardOutput = FileHandle.standardOutput
 
-    init(repository: PromptRepository) {
+    init(repository: LibraryRepository) {
         self.repository = repository
     }
 
@@ -65,7 +67,7 @@ final class MCPStdioServer {
         return [
             "protocolVersion": requestedVersion,
             "capabilities": ["tools": ["listChanged": false]],
-            "serverInfo": ["name": "promptboard", "version": "1.1.0"],
+            "serverInfo": ["name": "promptboard", "version": "1.2.0"],
         ]
     }
 

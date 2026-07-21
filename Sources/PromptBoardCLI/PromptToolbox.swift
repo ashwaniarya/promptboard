@@ -20,7 +20,7 @@ enum PromptToolbox {
         makeTool(
             name: "get_prompt",
             description: "Fetch one prompt by id.",
-            properties: ["id": promptIDSchema],
+            properties: ["id": idSchema],
             required: ["id"]
         ),
         makeTool(
@@ -29,43 +29,55 @@ enum PromptToolbox {
             properties: [
                 "title": ["type": "string", "description": "Optional title; defaults to \"Untitled\""],
                 "content": ["type": "string", "description": "The prompt text"],
+                "group": ["type": "string", "description": "Optional group to file it under"],
             ],
             required: ["content"]
         ),
         makeTool(
             name: "update_prompt",
-            description: "Update a saved prompt's title and/or content. Omitted fields are preserved. Get ids from list_prompts.",
+            description: "Update a saved prompt's title, content, and/or group. Omitted fields are preserved. Get ids from list_prompts.",
             properties: [
-                "id": promptIDSchema,
+                "id": idSchema,
                 "title": ["type": "string"],
                 "content": ["type": "string"],
+                "group": ["type": "string"],
             ],
             required: ["id"]
         ),
         makeTool(
             name: "delete_prompt",
             description: "Delete a prompt by id.",
-            properties: ["id": promptIDSchema],
+            properties: ["id": idSchema],
+            required: ["id"]
+        ),
+        makeTool(
+            name: "list_skills",
+            description: "List saved skills (Agent Skills: a SKILL.md plus supporting files), newest first. Optional query filters by name/description/body. Returns each skill's id and its file list.",
+            properties: [
+                "query": ["type": "string", "description": "Filter text; omit to list everything"],
+            ],
+            required: []
+        ),
+        makeTool(
+            name: "get_skill",
+            description: "Fetch one skill by id, including its SKILL.md body and the list of supporting files.",
+            properties: ["id": idSchema],
             required: ["id"]
         ),
     ] }
 
-    static func call(name: String, arguments: [String: Any], repository: PromptRepository) -> CallOutcome {
+    static func call(name: String, arguments: [String: Any], repository: LibraryRepository) -> CallOutcome {
         do {
             switch name {
             case "list_prompts":
-                let query = arguments["query"] as? String ?? ""
-                let prompts = try repository.loadIfPresent()?.prompts ?? []
-                let visible = PromptFilter.filter(prompts, query: query)
-                    .sorted { $0.updatedAt > $1.updatedAt }
-                return .success(payload: try jsonObject(["prompts": visible]))
+                let prompts = try loadPrompts(repository, query: arguments["query"] as? String ?? "")
+                return .success(payload: try jsonObject(["prompts": prompts]))
 
             case "get_prompt":
-                guard let id = promptID(in: arguments) else {
+                guard let id = itemID(in: arguments) else {
                     return .invalidParams(message: "get_prompt requires id (UUID from list_prompts)")
                 }
-                let prompts = try repository.loadIfPresent()?.prompts ?? []
-                guard let prompt = prompts.first(where: { $0.id == id }) else {
+                guard case let .prompt(prompt)? = try repository.load().items.first(where: { $0.id == id }) else {
                     return .domainError(message: "prompt not found: \(id.uuidString)")
                 }
                 return .success(payload: try jsonObject(["prompt": prompt]))
@@ -74,44 +86,72 @@ enum PromptToolbox {
                 guard let content = arguments["content"] as? String else {
                     return .invalidParams(message: "add_prompt requires string argument: content")
                 }
-                let title = arguments["title"] as? String ?? ""
-                let mutation = try repository.add(title: title, content: content)
-                return .success(payload: try jsonObject(["prompt": mutation.prompt]))
+                let prompt = try repository.addPrompt(
+                    title: arguments["title"] as? String ?? "",
+                    content: content,
+                    group: arguments["group"] as? String
+                )
+                return .success(payload: try jsonObject(["prompt": prompt]))
 
             case "update_prompt":
-                guard let id = promptID(in: arguments) else {
+                guard let id = itemID(in: arguments) else {
                     return .invalidParams(message: "update_prompt requires id (UUID from list_prompts)")
                 }
                 let title = arguments["title"] as? String
                 let content = arguments["content"] as? String
-                guard title != nil || content != nil else {
-                    return .invalidParams(message: "update_prompt requires title and/or content")
+                let group = arguments["group"] as? String
+                guard title != nil || content != nil || group != nil else {
+                    return .invalidParams(message: "update_prompt requires title, content, and/or group")
                 }
-                let mutation = try repository.update(id: id, title: title, content: content)
-                return .success(payload: try jsonObject(["prompt": mutation.prompt]))
+                let prompt = try repository.updatePrompt(id: id, title: title, content: content, group: group)
+                return .success(payload: try jsonObject(["prompt": prompt]))
 
             case "delete_prompt":
-                guard let id = promptID(in: arguments) else {
+                guard let id = itemID(in: arguments) else {
                     return .invalidParams(message: "delete_prompt requires id (UUID from list_prompts)")
                 }
-                let mutation = try repository.delete(id: id)
-                return .success(payload: try jsonObject(["deleted": mutation.prompt]))
+                let prompt = try repository.deletePrompt(id: id)
+                return .success(payload: try jsonObject(["deleted": prompt]))
+
+            case "list_skills":
+                let skills = try loadSkills(repository, query: arguments["query"] as? String ?? "")
+                return .success(payload: try jsonObject(["skills": skills]))
+
+            case "get_skill":
+                guard let id = itemID(in: arguments) else {
+                    return .invalidParams(message: "get_skill requires id (UUID from list_skills)")
+                }
+                guard case let .skill(skill)? = try repository.load().items.first(where: { $0.id == id }) else {
+                    return .domainError(message: "skill not found: \(id.uuidString)")
+                }
+                return .success(payload: try jsonObject(["skill": skill]))
 
             default:
                 return .invalidParams(message: "unknown tool: \(name)")
             }
-        } catch let error as PromptRepositoryError {
+        } catch let error as LibraryRepositoryError {
             return .domainError(message: repositoryErrorMessage(for: error))
         } catch {
             return .domainError(message: "unexpected failure: \(error.localizedDescription)")
         }
     }
 
-    private static var promptIDSchema: [String: Any] {
-        [
-            "type": "string",
-            "description": "Prompt UUID from list_prompts",
-        ]
+    private static func loadPrompts(_ repository: LibraryRepository, query: String) throws -> [Prompt] {
+        let entries = try repository.load().items.filter { $0.kind == .prompt }
+        return PromptFilter.filter(entries, query: query)
+            .compactMap { if case .prompt(let prompt) = $0 { prompt } else { nil } }
+            .sorted { $0.updatedAt > $1.updatedAt }
+    }
+
+    private static func loadSkills(_ repository: LibraryRepository, query: String) throws -> [Skill] {
+        let entries = try repository.load().items.filter { $0.kind == .skill }
+        return PromptFilter.filter(entries, query: query)
+            .compactMap { if case .skill(let skill) = $0 { skill } else { nil } }
+            .sorted { $0.updatedAt > $1.updatedAt }
+    }
+
+    private static var idSchema: [String: Any] {
+        ["type": "string", "description": "Item UUID from list_prompts / list_skills"]
     }
 
     private static func makeTool(
@@ -131,12 +171,12 @@ enum PromptToolbox {
         ]
     }
 
-    private static func promptID(in arguments: [String: Any]) -> UUID? {
+    private static func itemID(in arguments: [String: Any]) -> UUID? {
         (arguments["id"] as? String).flatMap(UUID.init(uuidString:))
     }
 
     private static func jsonObject(_ value: some Encodable) throws -> [String: Any] {
-        let data = try PromptRepository.makeEncoder().encode(value)
+        let data = try CanonicalJSON.makeEncoder().encode(value)
         return try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
     }
 }

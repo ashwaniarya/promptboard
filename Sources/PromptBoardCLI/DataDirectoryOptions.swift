@@ -5,7 +5,7 @@ import PromptBoardKit
 struct DataDirectoryOptions: ParsableArguments {
     @Option(
         name: .customLong("data-dir"),
-        help: "Directory containing prompts.json (default: $PROMPTBOARD_DATA_DIR, else ~/Library/Application Support/PromptBoard)"
+        help: "Library directory (default: $PROMPTBOARD_DATA_DIR, else ~/Library/Application Support/PromptBoard)"
     )
     var dataDir: String?
 
@@ -17,10 +17,14 @@ struct DataDirectoryOptions: ParsableArguments {
            !environmentPath.isEmpty {
             return URL(fileURLWithPath: environmentPath, isDirectory: true)
         }
-        return PromptRepository.defaultDirectoryURL
+        return LibraryRepository.defaultDirectoryURL
     }
 
-    var repository: PromptRepository {
-        PromptRepository(directoryURL: resolvedDirectoryURL)
+    var repository: LibraryRepository {
+        let claudeSkillsURL = ProcessInfo.processInfo.environment["PROMPTBOARD_CLAUDE_SKILLS_DIR"]
+            .flatMap { $0.isEmpty ? nil : $0 }
+            .map { URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath, isDirectory: true) }
+            ?? LibraryRepository.defaultClaudeSkillsURL
+        return LibraryRepository(directoryURL: resolvedDirectoryURL, claudeSkillsURL: claudeSkillsURL)
     }
 }

@@ -116,7 +116,7 @@ public final class LibraryStore {
         let freshInstall = !FileManager.default.fileExists(atPath: repository.libraryURL.path)
         let migrated = (try? repository.migrateLegacyIfNeeded()) ?? false
         if freshInstall, !migrated {
-            try? repository.seedPromptsIfEmpty(SeedPrompts.samples)
+            _ = try? repository.seedPromptsIfEmpty(SeedPrompts.samples)
         }
         refreshFromDisk()
     }
