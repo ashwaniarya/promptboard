@@ -101,9 +101,9 @@ private final class DebugHookTarget: NSObject {
 
     @objc nonisolated func handleDumpPrompts(_ notification: Notification) {
         MainActor.assumeIsolated {
-            let prompts = appState.store.prompts
-            let titles = prompts.map(\.title).joined(separator: " | ")
-            NSLog("%@", "PromptBoardDebug prompts: count=\(prompts.count) titles=\(titles)")
+            let items = appState.store.items
+            let titles = items.map(\.title).joined(separator: " | ")
+            NSLog("%@", "PromptBoardDebug items: count=\(items.count) titles=\(titles)")
         }
     }
 

@@ -42,10 +42,10 @@ public struct LibraryRepository: Sendable {
     // MARK: - Loading
 
     public struct Load: Sendable {
-        public let items: [LibraryItem]
+        public let items: [LibraryEntry]
         public let skippedPaths: [String]
 
-        public init(items: [LibraryItem], skippedPaths: [String]) {
+        public init(items: [LibraryEntry], skippedPaths: [String]) {
             self.items = items
             self.skippedPaths = skippedPaths
         }
@@ -53,7 +53,7 @@ public struct LibraryRepository: Sendable {
 
     // Lock-free: each file is written atomically, so a scan never sees a torn item.
     public func load() throws -> Load {
-        var items: [LibraryItem] = []
+        var items: [LibraryEntry] = []
         var skipped: [String] = []
         for url in promptFileURLs() {
             if let prompt = readPrompt(at: url) {
@@ -158,6 +158,28 @@ public struct LibraryRepository: Sendable {
                 try FileManager.default.moveItem(at: legacyDataFileURL, to: backup)
             } catch {
                 throw LibraryRepositoryError.ioFailure(underlying: error)
+            }
+            return true
+        }
+    }
+
+    public func ensureLibraryDirectories() throws {
+        try ensureDirectory(promptsDirectoryURL)
+        try ensureDirectory(skillsDirectoryURL)
+    }
+
+    // Seeds sample prompts only into an empty library; the existence re-check inside
+    // the lock makes concurrent first-run stores race-safe (no double seed).
+    @discardableResult
+    public func seedPromptsIfEmpty(_ samples: [Prompt]) throws -> Bool {
+        try withExclusiveLock {
+            guard existingPromptSlugs().isEmpty else { return false }
+            try ensureDirectory(promptsDirectoryURL)
+            var used = Set<String>()
+            for sample in samples {
+                let slug = Slug.unique(Slug.make(from: sample.title), existing: used)
+                used.insert(slug)
+                try writePrompt(sample, to: promptsDirectoryURL.appendingPathComponent("\(slug).md"))
             }
             return true
         }

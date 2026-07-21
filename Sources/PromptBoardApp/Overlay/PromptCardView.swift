@@ -2,19 +2,31 @@ import SwiftUI
 import PromptBoardKit
 
 struct PromptCardView: View {
-    let prompt: Prompt
+    let item: LibraryEntry
     let appState: AppState
 
     @State private var isHovering = false
     @State private var justCopied = false
     @State private var copiedResetTask: Task<Void, Never>?
 
+    private var isSkill: Bool { item.kind == .skill }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(prompt.title)
-                .font(.headline)
-                .lineLimit(2)
-            Text(prompt.content.trimmingCharacters(in: .whitespacesAndNewlines))
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(item.title)
+                    .font(.headline)
+                    .lineLimit(2)
+                if isSkill {
+                    Text("skill")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.75))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(.white.opacity(0.12)))
+                }
+            }
+            Text(item.previewText.trimmingCharacters(in: .whitespacesAndNewlines))
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
                 .lineLimit(12)
@@ -33,8 +45,8 @@ struct PromptCardView: View {
         .overlay(alignment: .topTrailing) { deleteButton }
         .contentShape(Rectangle())
         .gesture(
-            TapGesture(count: 2).onEnded { appState.beginEditing(prompt) }
-                .exclusively(before: TapGesture(count: 1).onEnded { copyPrompt() })
+            TapGesture(count: 2).onEnded { beginEditingIfPrompt() }
+                .exclusively(before: TapGesture(count: 1).onEnded { copyItem() })
         )
         .onHover { hovering in
             withAnimation(.easeOut(duration: 0.12)) { isHovering = hovering }
@@ -62,7 +74,7 @@ struct PromptCardView: View {
     private var deleteButton: some View {
         if isHovering {
             Button {
-                appState.deletePrompt(id: prompt.id)
+                appState.deleteItem(id: item.id)
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 16))
@@ -71,12 +83,21 @@ struct PromptCardView: View {
             .buttonStyle(.plain)
             .padding(6)
             .transition(.opacity)
-            .help("Delete prompt")
+            .help(isSkill ? "Delete skill" : "Delete prompt")
         }
     }
 
-    private func copyPrompt() {
-        appState.copyToClipboard(prompt)
+    private func beginEditingIfPrompt() {
+        // Skill editing arrives in Layer C; for now a skill's double-click copies like a single tap.
+        if case .prompt(let prompt) = item {
+            appState.beginEditing(prompt)
+        } else {
+            copyItem()
+        }
+    }
+
+    private func copyItem() {
+        appState.copyToClipboard(item)
         withAnimation(.spring(duration: 0.25)) { justCopied = true }
         copiedResetTask?.cancel()
         copiedResetTask = Task {

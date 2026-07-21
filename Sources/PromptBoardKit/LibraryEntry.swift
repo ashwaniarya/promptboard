@@ -1,6 +1,6 @@
 import Foundation
 
-public enum LibraryItem: Identifiable, Equatable, Sendable {
+public enum LibraryEntry: Identifiable, Equatable, Sendable {
     case prompt(Prompt)
     case skill(Skill)
 
@@ -41,6 +41,13 @@ public enum LibraryItem: Identifiable, Equatable, Sendable {
         switch self {
         case .prompt(let prompt): prompt.updatedAt
         case .skill(let skill): skill.updatedAt
+        }
+    }
+
+    public var previewText: String {
+        switch self {
+        case .prompt(let prompt): prompt.content
+        case .skill(let skill): skill.description.isEmpty ? skill.body : skill.description
         }
     }
 }

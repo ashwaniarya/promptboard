@@ -1,0 +1,148 @@
+import Foundation
+import Observation
+
+// Observable cache over LibraryRepository. Keeps the app's non-throwing surface,
+// live-reloads external changes (rescan + content signature to suppress our own
+// writes), and migrates/seeds on first run. Skill-authoring stays in the repository.
+@MainActor
+@Observable
+public final class LibraryStore {
+    public private(set) var items: [LibraryEntry] = []
+
+    private let repository: LibraryRepository
+    private var lastSignature = ""
+    @ObservationIgnored private var watchers: [DirectoryChangeWatcher] = []
+    @ObservationIgnored private var pendingReloadTask: Task<Void, Never>?
+
+    public static var defaultDirectoryURL: URL {
+        LibraryRepository.defaultDirectoryURL
+    }
+
+    public var groups: [String] {
+        var seen = Set<String>()
+        var ordered: [String] = []
+        for case let group? in items.map(\.group) where !seen.contains(group) {
+            seen.insert(group)
+            ordered.append(group)
+        }
+        return ordered.sorted()
+    }
+
+    public init(directoryURL: URL) {
+        repository = LibraryRepository(directoryURL: directoryURL)
+        loadInitial()
+    }
+
+    // MARK: - Prompt mutations
+
+    @discardableResult
+    public func add(title: String, content: String, group: String? = nil) -> Prompt {
+        do {
+            let prompt = try repository.addPrompt(title: title, content: content, group: group)
+            refreshFromDisk()
+            return prompt
+        } catch {
+            reportFailure(error)
+            let prompt = Prompt(title: LibraryRepository.normalizedTitle(title), content: content, group: group)
+            items.append(.prompt(prompt))
+            return prompt
+        }
+    }
+
+    public func update(id: UUID, title: String, content: String) {
+        do {
+            _ = try repository.updatePrompt(id: id, title: title, content: content)
+            refreshFromDisk()
+        } catch LibraryRepositoryError.promptNotFound {
+        } catch {
+            reportFailure(error)
+        }
+    }
+
+    // Routes by id: a prompt if one matches, otherwise a skill.
+    public func delete(id: UUID) {
+        do {
+            _ = try repository.deletePrompt(id: id)
+            refreshFromDisk()
+            return
+        } catch LibraryRepositoryError.promptNotFound {
+        } catch {
+            reportFailure(error)
+            return
+        }
+        do {
+            _ = try repository.deleteSkill(id: id)
+            refreshFromDisk()
+        } catch LibraryRepositoryError.skillNotFound {
+        } catch {
+            reportFailure(error)
+        }
+    }
+
+    // MARK: - Live reload
+
+    public func startWatchingForExternalChanges() {
+        guard watchers.isEmpty else { return }
+        try? repository.ensureLibraryDirectories()
+        for directory in [repository.promptsDirectoryURL, repository.skillsDirectoryURL] {
+            if let watcher = DirectoryChangeWatcher(directoryURL: directory, onChange: { [weak self] in
+                MainActor.assumeIsolated { self?.scheduleReload() }
+            }) {
+                watchers.append(watcher)
+            }
+        }
+    }
+
+    public func reloadFromDiskIfChanged() {
+        guard let load = try? repository.load() else { return }
+        let signature = Self.signature(of: load.items)
+        guard signature != lastSignature else { return }
+        items = load.items
+        lastSignature = signature
+    }
+
+    private func scheduleReload() {
+        pendingReloadTask?.cancel()
+        pendingReloadTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled else { return }
+            self?.reloadFromDiskIfChanged()
+        }
+    }
+
+    // MARK: - Internals
+
+    private func loadInitial() {
+        let freshInstall = !FileManager.default.fileExists(atPath: repository.libraryURL.path)
+        let migrated = (try? repository.migrateLegacyIfNeeded()) ?? false
+        if freshInstall, !migrated {
+            try? repository.seedPromptsIfEmpty(SeedPrompts.samples)
+        }
+        refreshFromDisk()
+    }
+
+    // Reads the on-disk state back after our own writes so the resulting signature
+    // matches what a subsequent watcher-triggered reload will compute (self-write suppression).
+    private func refreshFromDisk() {
+        let load = (try? repository.load()) ?? LibraryRepository.Load(items: [], skippedPaths: [])
+        items = load.items
+        lastSignature = Self.signature(of: load.items)
+    }
+
+    private static func signature(of items: [LibraryEntry]) -> String {
+        items.map { item -> String in
+            switch item {
+            case .prompt(let prompt):
+                "p:\(prompt.id.uuidString):\(prompt.updatedAt.timeIntervalSince1970):\(prompt.content.count)"
+            case .skill(let skill):
+                "s:\(skill.id.uuidString):\(skill.updatedAt.timeIntervalSince1970):\(skill.body.count)"
+            }
+        }
+        .sorted()
+        .joined(separator: ";")
+    }
+
+    private func reportFailure(_ error: any Error) {
+        FileHandle.standardError.write(Data("LibraryStore repository failure: \(error)\n".utf8))
+    }
+}

@@ -12,20 +12,20 @@ struct MasonryGridView: View {
             let availableWidth = geometry.size.width - horizontalPadding * 2
             let columnCount = max(2, min(5, Int(availableWidth / 320)))
             let cardWidth = (availableWidth - columnSpacing * Double(columnCount - 1)) / Double(columnCount)
-            let columns = MasonryLayout.distribute(appState.visiblePrompts, columns: columnCount) {
-                MasonryLayout.estimatedCardHeight(title: $0.title, content: $0.content, cardWidth: cardWidth)
+            let columns = MasonryLayout.distribute(appState.visibleItems, columns: columnCount) {
+                MasonryLayout.estimatedCardHeight(title: $0.title, content: $0.previewText, cardWidth: cardWidth)
             }
 
             ScrollView(.vertical, showsIndicators: false) {
                 Group {
-                    if appState.visiblePrompts.isEmpty {
+                    if appState.visibleItems.isEmpty {
                         emptyState
                     } else {
                         HStack(alignment: .top, spacing: columnSpacing) {
                             ForEach(columns.indices, id: \.self) { columnIndex in
                                 VStack(spacing: columnSpacing) {
-                                    ForEach(columns[columnIndex]) { prompt in
-                                        PromptCardView(prompt: prompt, appState: appState)
+                                    ForEach(columns[columnIndex]) { item in
+                                        PromptCardView(item: item, appState: appState)
                                     }
                                 }
                                 .frame(width: cardWidth)

@@ -76,7 +76,7 @@ struct OverlayRootView: View {
                 },
                 onDelete: {
                     if case .edit(let prompt) = editorMode {
-                        return { appState.deletePrompt(id: prompt.id) }
+                        return { appState.deleteItem(id: prompt.id) }
                     }
                     return nil
                 }(),

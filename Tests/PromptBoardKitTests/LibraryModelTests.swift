@@ -18,7 +18,7 @@ struct LibraryModelTests {
 
     @Test func libraryItemPromptExposesSharedAccessors() {
         let prompt = Prompt(title: "Code review", content: "body", group: "Coding")
-        let item = LibraryItem.prompt(prompt)
+        let item = LibraryEntry.prompt(prompt)
         #expect(item.id == prompt.id)
         #expect(item.title == "Code review")
         #expect(item.group == "Coding")
@@ -28,7 +28,7 @@ struct LibraryModelTests {
 
     @Test func libraryItemSkillUsesNameAsTitle() {
         let skill = Skill(name: "trello-card-reader", description: "Read a Trello card", group: "Research")
-        let item = LibraryItem.skill(skill)
+        let item = LibraryEntry.skill(skill)
         #expect(item.id == skill.id)
         #expect(item.title == "trello-card-reader")
         #expect(item.group == "Research")

@@ -10,7 +10,7 @@ final class AppState {
         case edit(Prompt)
     }
 
-    let store: PromptStore
+    let store: LibraryStore
     var searchText = ""
     private(set) var overlaySession = 0
 
@@ -32,12 +32,12 @@ final class AppState {
     @ObservationIgnored var requestFocusEditorTitle: () -> Void = {}
     @ObservationIgnored var requestFocusSearchField: () -> Void = {}
 
-    init(store: PromptStore) {
+    init(store: LibraryStore) {
         self.store = store
     }
 
-    var visiblePrompts: [Prompt] {
-        PromptFilter.filter(store.prompts, query: searchText)
+    var visibleItems: [LibraryEntry] {
+        PromptFilter.filter(store.items, query: searchText)
             .sorted { $0.updatedAt > $1.updatedAt }
     }
 
@@ -68,11 +68,16 @@ final class AppState {
         }
     }
 
-    func copyToClipboard(_ prompt: Prompt) {
+    func copyToClipboard(_ item: LibraryEntry) {
+        let text: String
+        switch item {
+        case .prompt(let prompt): text = prompt.content
+        case .skill(let skill): text = skill.body.isEmpty ? skill.description : skill.body
+        }
         let pasteboard = NSPasteboard.general
         // clearContents() is required before setString; skipping it makes the write silently fail
         pasteboard.clearContents()
-        pasteboard.setString(prompt.content, forType: .string)
+        pasteboard.setString(text, forType: .string)
     }
 
     func beginEditing(_ prompt: Prompt) {
@@ -95,7 +100,7 @@ final class AppState {
         editorMode = nil
     }
 
-    func deletePrompt(id: UUID) {
+    func deleteItem(id: UUID) {
         store.delete(id: id)
         if case .edit(let editingPrompt) = editorMode, editingPrompt.id == id {
             editorMode = nil
