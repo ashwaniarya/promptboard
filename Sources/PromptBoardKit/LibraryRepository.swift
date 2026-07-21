@@ -11,8 +11,8 @@ public enum LibraryRepositoryError: Error, Sendable {
 }
 
 // Folder-based library: prompts as `<slug>.md` (frontmatter + body), skills as
-// Agent Skills folders (added in a later step). Same flock read-modify-write and
-// atomic-write discipline as the legacy PromptRepository, now spanning many files.
+// Agent Skills folders with a `.promptboard.json` sidecar. flock read-modify-write
+// with atomic per-file writes, now spanning many files instead of one JSON blob.
 // Non-reentrant: never call the self-locking conveniences from inside `body`.
 public struct LibraryRepository: Sendable {
     public let directoryURL: URL
