@@ -25,6 +25,8 @@ struct OverlayRootView: View {
 
             if let editorMode = appState.editorMode {
                 editorLayer(editorMode)
+            } else if let expandedItem = appState.expandedItem {
+                detailLayer(expandedItem)
             }
         }
         .ignoresSafeArea()
@@ -116,6 +118,18 @@ struct OverlayRootView: View {
                 onCancel: { appState.editorMode = nil }
             )
             .id(editorMode)
+        }
+        .transition(.opacity)
+    }
+
+    private func detailLayer(_ item: LibraryEntry) -> some View {
+        ZStack {
+            Color.black.opacity(0.4)
+                .contentShape(Rectangle())
+                .onTapGesture { appState.expandedItem = nil }
+
+            ItemDetailView(item: item, appState: appState)
+                .id(item.id)
         }
         .transition(.opacity)
     }

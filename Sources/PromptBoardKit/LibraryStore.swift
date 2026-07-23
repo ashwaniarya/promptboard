@@ -79,6 +79,11 @@ public final class LibraryStore {
         }
     }
 
+    public func skillFileText(id: UUID, relativePath: String) -> String? {
+        guard let data = try? repository.skillFileData(id: id, relativePath: relativePath) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
     // MARK: - Live reload
 
     public func startWatchingForExternalChanges() {

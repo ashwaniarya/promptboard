@@ -1,4 +1,5 @@
 import AppKit
+import PromptBoardKit
 
 @MainActor
 enum DebugHooks {
@@ -8,6 +9,7 @@ enum DebugHooks {
     static let commandKeyNotification = "com.arya.PromptBoard.debug.commandKey"
     static let dumpStateNotification = "com.arya.PromptBoard.debug.dumpState"
     static let dumpPromptsNotification = "com.arya.PromptBoard.debug.dumpPrompts"
+    static let expandFirstNotification = "com.arya.PromptBoard.debug.expandFirst"
 
     static var isEnabled: Bool {
         ProcessInfo.processInfo.environment["PROMPTBOARD_DEBUG"] == "1"
@@ -30,6 +32,7 @@ enum DebugHooks {
             (commandKeyNotification, #selector(DebugHookTarget.handleCommandKey(_:))),
             (dumpStateNotification, #selector(DebugHookTarget.handleDumpState(_:))),
             (dumpPromptsNotification, #selector(DebugHookTarget.handleDumpPrompts(_:))),
+            (expandFirstNotification, #selector(DebugHookTarget.handleExpandFirst(_:))),
         ]
         for (name, selector) in hooks {
             center.addObserver(
@@ -96,6 +99,24 @@ private final class DebugHookTarget: NSObject {
                 "[placeholder=\($0.placeholderString ?? $0.placeholderAttributedString?.string ?? "nil") value=\($0.stringValue) focused=\($0.currentEditor() != nil)]"
             }
             NSLog("%@", "PromptBoardDebug fields: \(fieldSummaries.joined(separator: " "))")
+        }
+    }
+
+    @objc nonisolated func handleExpandFirst(_ notification: Notification) {
+        let kind = notification.object as? String
+        MainActor.assumeIsolated {
+            overlayController.show()
+            let items = appState.visibleItems
+            let target: LibraryEntry?
+            switch kind {
+            case "skill": target = items.first { $0.kind == .skill }
+            case "prompt": target = items.first { $0.kind == .prompt }
+            default: target = items.first
+            }
+            if let target {
+                NSLog("%@", "PromptBoardDebug expandFirst -> \(target.title)")
+                appState.expand(target)
+            }
         }
     }
 
