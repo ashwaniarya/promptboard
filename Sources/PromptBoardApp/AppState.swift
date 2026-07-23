@@ -10,6 +10,11 @@ final class AppState {
         case edit(Prompt)
     }
 
+    enum SkillEditorMode: Equatable {
+        case create
+        case edit(Skill)
+    }
+
     let store: LibraryStore
     var searchText = ""
     var columnCount = 3
@@ -31,6 +36,16 @@ final class AppState {
     }
 
     var expandedItem: LibraryEntry?
+    var skillEditorMode: SkillEditorMode?
+    var convertingPrompt: Prompt?
+
+    var skillEditorIdentity: String {
+        switch skillEditorMode {
+        case .create: "create"
+        case .edit(let skill): skill.id.uuidString
+        case nil: "none"
+        }
+    }
 
     @ObservationIgnored var requestHide: () -> Void = {}
     @ObservationIgnored var requestFocusEditorTitle: () -> Void = {}
@@ -65,10 +80,16 @@ final class AppState {
         searchText = ""
         editorMode = nil
         expandedItem = nil
+        skillEditorMode = nil
+        convertingPrompt = nil
     }
 
     func handleEscape() {
-        if editorMode != nil {
+        if convertingPrompt != nil {
+            convertingPrompt = nil
+        } else if skillEditorMode != nil {
+            skillEditorMode = nil
+        } else if editorMode != nil {
             editorMode = nil
         } else if expandedItem != nil {
             expandedItem = nil
@@ -80,7 +101,11 @@ final class AppState {
     }
 
     func handleBackgroundClick() {
-        if editorMode != nil {
+        if convertingPrompt != nil {
+            convertingPrompt = nil
+        } else if skillEditorMode != nil {
+            skillEditorMode = nil
+        } else if editorMode != nil {
             editorMode = nil
         } else if expandedItem != nil {
             expandedItem = nil
@@ -130,5 +155,39 @@ final class AppState {
         if case .edit(let editingPrompt) = editorMode, editingPrompt.id == id {
             editorMode = nil
         }
+    }
+
+    func beginCreatingSkill() {
+        expandedItem = nil
+        skillEditorMode = .create
+    }
+
+    func beginEditingSkill(_ skill: Skill) {
+        expandedItem = nil
+        skillEditorMode = .edit(skill)
+    }
+
+    func beginConverting(_ prompt: Prompt) {
+        convertingPrompt = prompt
+    }
+
+    // Create's first save materializes the folder, then reopens in edit mode so
+    // file management unlocks (the editor was empty in create mode).
+    @discardableResult
+    func saveNewSkill(name: String, description: String, group: String?, body: String) -> Skill? {
+        guard let skill = store.createSkill(name: name, description: description, group: group, body: body) else {
+            skillEditorMode = nil
+            return nil
+        }
+        skillEditorMode = .edit(skill)
+        return skill
+    }
+
+    func confirmConvert(prompt: Prompt, name: String, description: String, group: String?, keepOriginal: Bool) {
+        let skill = store.promotePromptToSkill(
+            promptID: prompt.id, name: name, description: description, group: group, removingPrompt: !keepOriginal
+        )
+        convertingPrompt = nil
+        if let skill { skillEditorMode = .edit(skill) }
     }
 }
