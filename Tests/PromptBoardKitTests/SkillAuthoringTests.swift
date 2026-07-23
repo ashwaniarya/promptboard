@@ -43,4 +43,57 @@ struct SkillAuthoringTests {
         let second = try repository.createSkill(name: "Note", description: "two", group: nil, body: "")
         #expect(second.name == "note-2")
     }
+
+    @Test func updateSkillRewritesFieldsKeepingNameAndID() throws {
+        let (repository, _, _) = makeRepository()
+        let skill = try repository.createSkill(name: "notes", description: "old", group: nil, body: "# Old")
+
+        let updated = try repository.updateSkill(
+            id: skill.id, name: "notes", description: "new desc", group: "G", body: "# New"
+        )
+
+        #expect(updated.id == skill.id)
+        #expect(updated.name == "notes")
+        #expect(updated.description == "new desc")
+        #expect(updated.group == "G")
+        #expect(updated.body == "# New")
+    }
+
+    @Test func renamingSkillMovesFolderRelinksAndKeepsID() throws {
+        let (repository, directory, claude) = makeRepository()
+        let skill = try repository.createSkill(name: "old-name", description: "d", group: nil, body: "# B")
+
+        let renamed = try repository.updateSkill(
+            id: skill.id, name: "New Name", description: "d", group: nil, body: "# B"
+        )
+
+        #expect(renamed.name == "new-name")
+        #expect(renamed.id == skill.id)
+        #expect(!FileManager.default.fileExists(atPath: directory.appendingPathComponent("Library/skills/old-name").path))
+        #expect(FileManager.default.fileExists(atPath: directory.appendingPathComponent("Library/skills/new-name").path))
+        #expect((try? FileManager.default.destinationOfSymbolicLink(atPath: claude.appendingPathComponent("old-name").path)) == nil)
+        #expect((try? FileManager.default.destinationOfSymbolicLink(atPath: claude.appendingPathComponent("new-name").path)) != nil)
+    }
+
+    @Test func renamingSkillSkipsForeignLinkButStillRenamesFolder() throws {
+        let (repository, directory, claude) = makeRepository()
+        let foreign = claude.appendingPathComponent("taken")
+        try FileManager.default.createDirectory(at: foreign, withIntermediateDirectories: true)
+        try Data("real".utf8).write(to: foreign.appendingPathComponent("SKILL.md"))
+        let skill = try repository.createSkill(name: "mine", description: "d", group: nil, body: "")
+
+        let renamed = try repository.updateSkill(id: skill.id, name: "taken", description: "d", group: nil, body: "")
+
+        #expect(renamed.name == "taken")
+        #expect(FileManager.default.fileExists(atPath: directory.appendingPathComponent("Library/skills/taken").path))
+        #expect(try String(contentsOf: foreign.appendingPathComponent("SKILL.md"), encoding: .utf8) == "real")
+        #expect((try? FileManager.default.destinationOfSymbolicLink(atPath: foreign.path)) == nil)
+    }
+
+    @Test func updateSkillThrowsForMissingID() throws {
+        let (repository, _, _) = makeRepository()
+        #expect(throws: LibraryRepositoryError.self) {
+            try repository.updateSkill(id: UUID(), name: "x", description: "y", group: nil, body: "")
+        }
+    }
 }

@@ -22,6 +22,57 @@ extension LibraryRepository {
         }
     }
 
+    @discardableResult
+    public func updateSkill(id: UUID, name: String, description: String, group: String?, body: String) throws -> Skill {
+        try withExclusiveLock {
+            guard let found = try findSkillFolder(id: id) else {
+                throw LibraryRepositoryError.skillNotFound(id)
+            }
+            let currentFolderName = found.url.lastPathComponent
+            var folderURL = found.url
+            var effectiveName = currentFolderName
+
+            let desiredSlug = Slug.make(from: name)
+            if desiredSlug != currentFolderName {
+                let others = existingSkillFolderNames().subtracting([currentFolderName])
+                let newFolderName = Slug.unique(desiredSlug, existing: others)
+                folderURL = try renameSkillFolder(from: found.url, to: newFolderName)
+                effectiveName = newFolderName
+            }
+
+            try writeSkillMarkdown(name: effectiveName, description: description, body: body, in: folderURL)
+            let existing = readSidecar(in: folderURL)
+            try writeSidecar(SkillSidecar(
+                id: found.skill.id,
+                group: group,
+                createdAt: existing?.createdAt ?? found.skill.createdAt,
+                updatedAt: Date()
+            ), in: folderURL)
+
+            guard let skill = readSkill(at: folderURL) else {
+                throw LibraryRepositoryError.skillNotFound(id)
+            }
+            return skill
+        }
+    }
+
+    // Renames a library skill folder and re-points its ~/.claude/skills symlink.
+    // The library namespace is ours, so the move can't collide; only the new symlink
+    // path can be foreign — in which case the folder still renames and we warn.
+    func renameSkillFolder(from oldURL: URL, to newFolderName: String) throws -> URL {
+        let oldFolderName = oldURL.lastPathComponent
+        let newURL = skillFolderURL(name: newFolderName)
+        SymlinkManager.unlink(name: oldFolderName, from: claudeSkillsURL, expectedTarget: oldURL)
+        do {
+            try FileManager.default.moveItem(at: oldURL, to: newURL)
+        } catch {
+            linkSkill(at: oldURL, name: oldFolderName)
+            throw LibraryRepositoryError.ioFailure(underlying: error)
+        }
+        linkSkill(at: newURL, name: newFolderName)
+        return newURL
+    }
+
     // MARK: - Shared helpers
 
     func writeSkillMarkdown(name: String, description: String, body: String, in folderURL: URL) throws {
