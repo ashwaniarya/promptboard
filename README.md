@@ -3,11 +3,11 @@
 A macOS prompt **and skill** manager that lives in your menu bar. Press **⌥Space** anywhere and a full-screen overlay appears over a blurred desktop, showing your prompts and skills as **markdown-rendered cards**.
 
 - **Single-click** a card → copies the raw markdown to the clipboard (overlay stays open)
-- **Double-click** a prompt → edit · hover **⤢** → expand: a prompt shows full markdown, a skill shows its file tree beside its rendered `SKILL.md`
+- **Double-click** a prompt → edit it · a skill → expand (file tree beside its rendered `SKILL.md`), then **Edit** to open the skill editor
 - **Groups sidebar** filters the grid; the **column toggle** (2 / 3 / 4) sets density
 - **Type** → live-search across titles and bodies (focused on open)
-- **⌘N / +** → new prompt · hover **✕** → delete
-- **Esc** → closes the detail/editor, then clears search, then closes · **⌥Space** or empty-space click → closes
+- **+** → new prompt (**⌘N**) or **new skill** · hover a skill **✎** → edit · hover a prompt **✦** → convert it into a skill · hover **✕** → delete
+- **Esc** → closes the editor/detail, then clears search, then closes · **⌥Space** or empty-space click → closes
 
 ## Library layout
 
@@ -23,13 +23,14 @@ Library/
 
 - **Files are the source of truth** — no central index. Add, edit, or drop in items by hand and the app live-reloads them.
 - Each skill is **symlinked into `~/.claude/skills/<name>`** so Claude Code can use it directly; PromptBoard never overwrites a path it didn't create.
+- **Skills are authored in-app** — the skill editor edits `SKILL.md` (name / description / body) and manages supporting files (create, rename, delete, import from disk); renaming a skill renames its folder and re-points the symlink, skipping (with a warning) any foreign `~/.claude/skills` name. Metadata and file text commit on **Save**; file add/rename/delete apply immediately.
 - A legacy `prompts.json` is **migrated once** on first launch or first CLI/MCP access, then kept as a `prompts.json.migrated-<stamp>` backup (never deleted).
 
 ## Build & run
 
 ```bash
 swift build          # compile
-swift test           # unit tests (repository, store, filter, masonry)
+swift test           # unit tests (repository, store, filter, skill authoring, promote)
 swift run PromptBoardApp   # dev loop (menu bar icon appears; Ctrl-C to quit)
 make app             # assemble + ad-hoc sign dist/PromptBoard.app
 open dist/PromptBoard.app
@@ -81,7 +82,7 @@ args = ["mcp"]
 - `PROMPTBOARD_SHOW_ON_LAUNCH=1` — open the overlay immediately at launch
 - `PROMPTBOARD_DATA_DIR=/path` — use a different library directory (keeps your real library untouched)
 - `PROMPTBOARD_CLAUDE_SKILLS_DIR=/path` — where the CLI/MCP symlink skills (default `~/.claude/skills`); handy for isolated tests
-- `PROMPTBOARD_DEBUG=1` — listen for distributed notifications used for scripted UI verification: `com.arya.PromptBoard.debug.toggle` (toggle overlay), `…debug.newPrompt` (open overlay + blank editor), `…debug.commandKey` (replay a ⌘-key equivalent; object = character, e.g. `"v"`), `…debug.dumpState` (log key window, first responder, and each text field's value/focus), `…debug.dumpPrompts` (log item count + titles), `…debug.snapshot` (write a PNG of the overlay content; object = output path). Post one with:
+- `PROMPTBOARD_DEBUG=1` — listen for distributed notifications used for scripted UI verification: `com.arya.PromptBoard.debug.toggle` (toggle overlay), `…debug.newPrompt` (open overlay + blank editor), `…debug.commandKey` (replay a ⌘-key equivalent; object = character, e.g. `"v"`), `…debug.dumpState` (log key window, first responder, and each text field's value/focus), `…debug.dumpPrompts` (log item count + titles), `…debug.snapshot` (write a PNG of the overlay content; object = output path). Skill-editor hooks: `…debug.createSampleSkill` (object = name), `…debug.editFirstSkill`, `…debug.newSkill`, `…debug.convertFirstPrompt`, `…debug.confirmConvertFirst`, `…debug.addSampleFiles`. Post one with:
 
   ```bash
   swift -e 'import Foundation; DistributedNotificationCenter.default().postNotificationName(Notification.Name("com.arya.PromptBoard.debug.dumpState"), object: nil, userInfo: nil, deliverImmediately: true); Thread.sleep(forTimeInterval: 0.3)'
@@ -107,3 +108,7 @@ args = ["mcp"]
 16. Cards render markdown (headings, lists, **bold**, `code`, code blocks); single-click still copies the **raw** markdown.
 17. The column toggle (2 / 3 / 4) reflows the grid; the groups sidebar filters and shows live counts.
 18. Hover a card → **⤢** expands it: a prompt shows full markdown; a skill shows its file tree beside `SKILL.md` (select a file to view it). Esc or an outside click closes it.
+19. `+` → **New skill** → an empty editor; type a name + one-line description → **Create** → a skill card appears, `SKILL.md` holds only `name` + `description`, and a symlink lands in `~/.claude/skills/<name>` (`claude` lists it).
+20. A skill's detail → **Edit** (or hover a skill **✎**) → the editor loads name/description/group + the file rail. Change the body, **Save** → the card and `SKILL.md` update; the sidecar keeps the id.
+21. In the skill editor: **New** → `examples/ref.md` appears nested and editable; rename and delete it; **Import** pulls a file from disk; a non-text file shows "Binary file — rename or delete only". Rename the skill → its folder and `~/.claude/skills` symlink follow the new name (a foreign name is skipped with a warning).
+22. Hover a prompt **✦** → **Convert to skill** → name prefilled; add a description → **Convert** → a skill opens in the editor with the prompt's content as its `SKILL.md` body, and the original prompt is gone (unless "keep the original prompt" is checked).
