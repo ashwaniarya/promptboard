@@ -46,6 +46,16 @@ struct ItemDetailView: View {
                     .background(Capsule().fill(.white.opacity(0.07)))
             }
             Spacer(minLength: 8)
+            if case .skill(let skill) = item {
+                Button { appState.beginEditingSkill(skill) } label: {
+                    Label("Edit", systemImage: "pencil")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(accent)
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background(Capsule().fill(accent.opacity(0.14)))
+                }
+                .buttonStyle(.plain)
+            }
             copyButton
             closeButton
         }

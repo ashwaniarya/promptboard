@@ -23,7 +23,9 @@ struct OverlayRootView: View {
                 .padding(.trailing, 8)
             }
 
-            if let editorMode = appState.editorMode {
+            if let skillEditorMode = appState.skillEditorMode {
+                skillEditorLayer(skillEditorMode)
+            } else if let editorMode = appState.editorMode {
                 editorLayer(editorMode)
             } else if let expandedItem = appState.expandedItem {
                 detailLayer(expandedItem)
@@ -118,6 +120,18 @@ struct OverlayRootView: View {
                 onCancel: { appState.editorMode = nil }
             )
             .id(editorMode)
+        }
+        .transition(.opacity)
+    }
+
+    private func skillEditorLayer(_ mode: AppState.SkillEditorMode) -> some View {
+        ZStack {
+            Color.black.opacity(0.4)
+                .contentShape(Rectangle())
+                .onTapGesture { appState.skillEditorMode = nil }
+
+            SkillEditorView(mode: mode, appState: appState)
+                .id(appState.skillEditorIdentity)
         }
         .transition(.opacity)
     }
