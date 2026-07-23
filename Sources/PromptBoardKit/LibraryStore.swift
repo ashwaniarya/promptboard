@@ -28,8 +28,8 @@ public final class LibraryStore {
         return ordered.sorted()
     }
 
-    public init(directoryURL: URL) {
-        repository = LibraryRepository(directoryURL: directoryURL)
+    public init(directoryURL: URL, claudeSkillsURL: URL = LibraryRepository.defaultClaudeSkillsURL) {
+        repository = LibraryRepository(directoryURL: directoryURL, claudeSkillsURL: claudeSkillsURL)
         loadInitial()
     }
 

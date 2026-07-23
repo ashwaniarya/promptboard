@@ -147,18 +147,19 @@ struct LibraryStoreTests {
 
     @Test func createSkillAppearsInItemsAndPersists() {
         let directory = temporaryDirectory()
-        let store = LibraryStore(directoryURL: directory)
+        let claude = temporaryDirectory()
+        let store = LibraryStore(directoryURL: directory, claudeSkillsURL: claude)
 
         let skill = store.createSkill(name: "Runbook", description: "deploy steps", group: "Ops", body: "# Go")
 
         #expect(skill != nil)
         #expect(store.items.contains { $0.kind == .skill && $0.title == "runbook" })
-        #expect(LibraryStore(directoryURL: directory).items.contains { $0.title == "runbook" })
+        #expect(LibraryStore(directoryURL: directory, claudeSkillsURL: claude).items.contains { $0.title == "runbook" })
     }
 
     @Test func updateSkillRenameReplacesTheCardKeepingID() {
         let directory = temporaryDirectory()
-        let store = LibraryStore(directoryURL: directory)
+        let store = LibraryStore(directoryURL: directory, claudeSkillsURL: temporaryDirectory())
         let skill = store.createSkill(name: "before", description: "d", group: nil, body: "")!
 
         let renamed = store.updateSkill(id: skill.id, name: "after", description: "d", group: nil, body: "")
@@ -171,7 +172,7 @@ struct LibraryStoreTests {
 
     @Test func skillFileWriteAndDeleteRoundTripThroughStore() {
         let directory = temporaryDirectory()
-        let store = LibraryStore(directoryURL: directory)
+        let store = LibraryStore(directoryURL: directory, claudeSkillsURL: temporaryDirectory())
         let skill = store.createSkill(name: "docs", description: "d", group: nil, body: "")!
 
         _ = store.writeSkillFile(id: skill.id, relativePath: "ref.md", data: Data("hi".utf8))
@@ -184,7 +185,7 @@ struct LibraryStoreTests {
 
     @Test func promoteThroughStoreRemovesPromptAndAddsSkill() {
         let directory = temporaryDirectory()
-        let store = LibraryStore(directoryURL: directory)
+        let store = LibraryStore(directoryURL: directory, claudeSkillsURL: temporaryDirectory())
         let prompt = store.add(title: "Convert Me", content: "# body")
 
         let skill = store.promotePromptToSkill(
