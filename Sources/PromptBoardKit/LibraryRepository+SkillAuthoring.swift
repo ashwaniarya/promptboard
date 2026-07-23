@@ -73,6 +73,94 @@ extension LibraryRepository {
         return newURL
     }
 
+    // MARK: - Skill file ops
+
+    @discardableResult
+    public func writeSkillFile(id: UUID, relativePath: String, data: Data) throws -> Skill {
+        try withExclusiveLock {
+            guard let found = try findSkillFolder(id: id) else {
+                throw LibraryRepositoryError.skillNotFound(id)
+            }
+            let fileURL = try validatedSkillFileURL(in: found.url, relativePath: relativePath)
+            try ensureDirectory(fileURL.deletingLastPathComponent())
+            do {
+                try data.write(to: fileURL, options: .atomic)
+            } catch {
+                throw LibraryRepositoryError.ioFailure(underlying: error)
+            }
+            return try touchAndReadSkill(id: id, in: found.url, skill: found.skill)
+        }
+    }
+
+    @discardableResult
+    public func renameSkillFile(id: UUID, from source: String, to destination: String) throws -> Skill {
+        try withExclusiveLock {
+            guard let found = try findSkillFolder(id: id) else {
+                throw LibraryRepositoryError.skillNotFound(id)
+            }
+            let sourceURL = try validatedSkillFileURL(in: found.url, relativePath: source)
+            let destinationURL = try validatedSkillFileURL(in: found.url, relativePath: destination)
+            guard FileManager.default.fileExists(atPath: sourceURL.path) else {
+                throw LibraryRepositoryError.invalidSkillSource(path: source)
+            }
+            try ensureDirectory(destinationURL.deletingLastPathComponent())
+            do {
+                try FileManager.default.moveItem(at: sourceURL, to: destinationURL)
+            } catch {
+                throw LibraryRepositoryError.ioFailure(underlying: error)
+            }
+            return try touchAndReadSkill(id: id, in: found.url, skill: found.skill)
+        }
+    }
+
+    @discardableResult
+    public func deleteSkillFile(id: UUID, relativePath: String) throws -> Skill {
+        try withExclusiveLock {
+            guard let found = try findSkillFolder(id: id) else {
+                throw LibraryRepositoryError.skillNotFound(id)
+            }
+            let fileURL = try validatedSkillFileURL(in: found.url, relativePath: relativePath)
+            do {
+                try FileManager.default.removeItem(at: fileURL)
+            } catch {
+                throw LibraryRepositoryError.ioFailure(underlying: error)
+            }
+            return try touchAndReadSkill(id: id, in: found.url, skill: found.skill)
+        }
+    }
+
+    // Rejects empty paths, the two managed files, and anything escaping the folder.
+    // Purely lexical (no stat/symlink resolution) so it holds for files not yet on disk.
+    func validatedSkillFileURL(in folderURL: URL, relativePath: String) throws -> URL {
+        let trimmed = relativePath.trimmingCharacters(in: .whitespaces)
+        let components = trimmed.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
+        guard !trimmed.isEmpty,
+              trimmed != "SKILL.md",
+              trimmed != ".promptboard.json",
+              !trimmed.hasPrefix("/"),
+              !components.contains(""),
+              !components.contains("."),
+              !components.contains("..")
+        else {
+            throw LibraryRepositoryError.invalidSkillSource(path: relativePath)
+        }
+        return folderURL.appendingPathComponent(trimmed)
+    }
+
+    func touchAndReadSkill(id: UUID, in folderURL: URL, skill: Skill) throws -> Skill {
+        let existing = readSidecar(in: folderURL)
+        try writeSidecar(SkillSidecar(
+            id: skill.id,
+            group: existing?.group ?? skill.group,
+            createdAt: existing?.createdAt ?? skill.createdAt,
+            updatedAt: Date()
+        ), in: folderURL)
+        guard let refreshed = readSkill(at: folderURL) else {
+            throw LibraryRepositoryError.skillNotFound(id)
+        }
+        return refreshed
+    }
+
     // MARK: - Shared helpers
 
     func writeSkillMarkdown(name: String, description: String, body: String, in folderURL: URL) throws {

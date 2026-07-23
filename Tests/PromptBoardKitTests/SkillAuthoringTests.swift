@@ -96,4 +96,53 @@ struct SkillAuthoringTests {
             try repository.updateSkill(id: UUID(), name: "x", description: "y", group: nil, body: "")
         }
     }
+
+    @Test func writeSkillFileCreatesNestedFileAndBumpsUpdatedAt() throws {
+        let (repository, directory, _) = makeRepository()
+        let skill = try repository.createSkill(name: "toolkit", description: "d", group: nil, body: "")
+        let before = skill.updatedAt
+
+        let updated = try repository.writeSkillFile(
+            id: skill.id, relativePath: "examples/card.json", data: Data("{}".utf8)
+        )
+
+        #expect(updated.files.map(\.relativePath).contains("examples/card.json"))
+        #expect(updated.updatedAt >= before)
+        let onDisk = directory.appendingPathComponent("Library/skills/toolkit/examples/card.json")
+        #expect(try String(contentsOf: onDisk, encoding: .utf8) == "{}")
+    }
+
+    @Test func writeSkillFileRefusesReservedAndEscapingPaths() throws {
+        let (repository, _, _) = makeRepository()
+        let skill = try repository.createSkill(name: "guard", description: "d", group: nil, body: "")
+        #expect(throws: LibraryRepositoryError.self) {
+            try repository.writeSkillFile(id: skill.id, relativePath: "SKILL.md", data: Data())
+        }
+        #expect(throws: LibraryRepositoryError.self) {
+            try repository.writeSkillFile(id: skill.id, relativePath: ".promptboard.json", data: Data())
+        }
+        #expect(throws: LibraryRepositoryError.self) {
+            try repository.writeSkillFile(id: skill.id, relativePath: "../escape.txt", data: Data())
+        }
+    }
+
+    @Test func renameThenDeleteSkillFile() throws {
+        let (repository, _, _) = makeRepository()
+        let skill = try repository.createSkill(name: "files", description: "d", group: nil, body: "")
+        _ = try repository.writeSkillFile(id: skill.id, relativePath: "a.txt", data: Data("hi".utf8))
+
+        let renamed = try repository.renameSkillFile(id: skill.id, from: "a.txt", to: "b.txt")
+        #expect(renamed.files.map(\.relativePath) == ["b.txt"])
+
+        let deleted = try repository.deleteSkillFile(id: skill.id, relativePath: "b.txt")
+        #expect(deleted.files.isEmpty)
+    }
+
+    @Test func renameSkillFileThrowsWhenSourceMissing() throws {
+        let (repository, _, _) = makeRepository()
+        let skill = try repository.createSkill(name: "missing", description: "d", group: nil, body: "")
+        #expect(throws: LibraryRepositoryError.self) {
+            try repository.renameSkillFile(id: skill.id, from: "nope.txt", to: "yep.txt")
+        }
+    }
 }
