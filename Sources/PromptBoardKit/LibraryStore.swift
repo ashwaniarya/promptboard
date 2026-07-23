@@ -84,6 +84,84 @@ public final class LibraryStore {
         return String(data: data, encoding: .utf8)
     }
 
+    // MARK: - Skill authoring
+
+    @discardableResult
+    public func createSkill(name: String, description: String, group: String?, body: String) -> Skill? {
+        do {
+            let skill = try repository.createSkill(name: name, description: description, group: group, body: body)
+            refreshFromDisk()
+            return skill
+        } catch {
+            reportFailure(error)
+            return nil
+        }
+    }
+
+    @discardableResult
+    public func updateSkill(id: UUID, name: String, description: String, group: String?, body: String) -> Skill? {
+        do {
+            let skill = try repository.updateSkill(id: id, name: name, description: description, group: group, body: body)
+            refreshFromDisk()
+            return skill
+        } catch {
+            reportFailure(error)
+            return nil
+        }
+    }
+
+    @discardableResult
+    public func writeSkillFile(id: UUID, relativePath: String, data: Data) -> Skill? {
+        do {
+            let skill = try repository.writeSkillFile(id: id, relativePath: relativePath, data: data)
+            refreshFromDisk()
+            return skill
+        } catch {
+            reportFailure(error)
+            return nil
+        }
+    }
+
+    @discardableResult
+    public func renameSkillFile(id: UUID, from source: String, to destination: String) -> Skill? {
+        do {
+            let skill = try repository.renameSkillFile(id: id, from: source, to: destination)
+            refreshFromDisk()
+            return skill
+        } catch {
+            reportFailure(error)
+            return nil
+        }
+    }
+
+    @discardableResult
+    public func deleteSkillFile(id: UUID, relativePath: String) -> Skill? {
+        do {
+            let skill = try repository.deleteSkillFile(id: id, relativePath: relativePath)
+            refreshFromDisk()
+            return skill
+        } catch {
+            reportFailure(error)
+            return nil
+        }
+    }
+
+    @discardableResult
+    public func promotePromptToSkill(
+        promptID: UUID, name: String, description: String, group: String?, removingPrompt: Bool
+    ) -> Skill? {
+        do {
+            let skill = try repository.promotePromptToSkill(
+                promptID: promptID, name: name, description: description, group: group, removingPrompt: removingPrompt
+            )
+            refreshFromDisk()
+            return skill
+        } catch {
+            reportFailure(error)
+            return nil
+        }
+    }
+
     // MARK: - Live reload
 
     public func startWatchingForExternalChanges() {

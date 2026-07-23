@@ -144,4 +144,55 @@ struct LibraryStoreTests {
 
         #expect(store.items.contains { $0.id == good.id })
     }
+
+    @Test func createSkillAppearsInItemsAndPersists() {
+        let directory = temporaryDirectory()
+        let store = LibraryStore(directoryURL: directory)
+
+        let skill = store.createSkill(name: "Runbook", description: "deploy steps", group: "Ops", body: "# Go")
+
+        #expect(skill != nil)
+        #expect(store.items.contains { $0.kind == .skill && $0.title == "runbook" })
+        #expect(LibraryStore(directoryURL: directory).items.contains { $0.title == "runbook" })
+    }
+
+    @Test func updateSkillRenameReplacesTheCardKeepingID() {
+        let directory = temporaryDirectory()
+        let store = LibraryStore(directoryURL: directory)
+        let skill = store.createSkill(name: "before", description: "d", group: nil, body: "")!
+
+        let renamed = store.updateSkill(id: skill.id, name: "after", description: "d", group: nil, body: "")
+
+        #expect(renamed?.id == skill.id)
+        #expect(store.items.contains { $0.title == "after" })
+        #expect(!store.items.contains { $0.title == "before" })
+        #expect(store.items.filter { $0.id == skill.id }.count == 1)
+    }
+
+    @Test func skillFileWriteAndDeleteRoundTripThroughStore() {
+        let directory = temporaryDirectory()
+        let store = LibraryStore(directoryURL: directory)
+        let skill = store.createSkill(name: "docs", description: "d", group: nil, body: "")!
+
+        _ = store.writeSkillFile(id: skill.id, relativePath: "ref.md", data: Data("hi".utf8))
+        #expect(store.skillFileText(id: skill.id, relativePath: "ref.md") == "hi")
+
+        _ = store.deleteSkillFile(id: skill.id, relativePath: "ref.md")
+        let reloaded = store.items.compactMap { if case .skill(let s) = $0 { s } else { nil } }.first { $0.id == skill.id }
+        #expect(reloaded?.files.isEmpty == true)
+    }
+
+    @Test func promoteThroughStoreRemovesPromptAndAddsSkill() {
+        let directory = temporaryDirectory()
+        let store = LibraryStore(directoryURL: directory)
+        let prompt = store.add(title: "Convert Me", content: "# body")
+
+        let skill = store.promotePromptToSkill(
+            promptID: prompt.id, name: "Convert Me", description: "d", group: nil, removingPrompt: true
+        )
+
+        #expect(skill != nil)
+        #expect(!store.items.contains { $0.id == prompt.id })
+        #expect(store.items.contains { $0.kind == .skill && $0.title == "convert-me" })
+    }
 }
