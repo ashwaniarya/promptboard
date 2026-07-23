@@ -14,7 +14,7 @@ struct OverlayRootView: View {
 
             VStack(spacing: 28) {
                 searchBar
-                MasonryGridView(appState: appState)
+                LibraryGridView(appState: appState)
             }
             .padding(.top, 64)
 
@@ -60,6 +60,34 @@ struct OverlayRootView: View {
             .buttonStyle(.plain)
             .keyboardShortcut("n", modifiers: .command)
             .help("New Prompt (⌘N)")
+
+            columnToggle
+        }
+    }
+
+    private var columnToggle: some View {
+        HStack(spacing: 0) {
+            ForEach([2, 3, 4], id: \.self) { count in
+                Button { appState.columnCount = count } label: {
+                    Image(systemName: columnIcon(count))
+                        .font(.system(size: 13))
+                        .foregroundStyle(appState.columnCount == count ? .primary : .secondary)
+                        .frame(width: 32, height: 34)
+                        .background(appState.columnCount == count ? Color.white.opacity(0.14) : .clear)
+                }
+                .buttonStyle(.plain)
+                .help("\(count) columns")
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.white.opacity(0.12)))
+    }
+
+    private func columnIcon(_ count: Int) -> String {
+        switch count {
+        case 2: "square.grid.2x2"
+        case 4: "square.grid.4x3.fill"
+        default: "square.grid.3x2"
         }
     }
 

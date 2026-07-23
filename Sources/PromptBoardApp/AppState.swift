@@ -12,6 +12,7 @@ final class AppState {
 
     let store: LibraryStore
     var searchText = ""
+    var columnCount = 3
     private(set) var overlaySession = 0
 
     // SwiftUI @FocusState writes are ignored while the app is inactive — and a
@@ -27,6 +28,8 @@ final class AppState {
             }
         }
     }
+
+    var expandedItem: LibraryEntry?
 
     @ObservationIgnored var requestHide: () -> Void = {}
     @ObservationIgnored var requestFocusEditorTitle: () -> Void = {}
@@ -48,11 +51,14 @@ final class AppState {
     func resetTransientState() {
         searchText = ""
         editorMode = nil
+        expandedItem = nil
     }
 
     func handleEscape() {
         if editorMode != nil {
             editorMode = nil
+        } else if expandedItem != nil {
+            expandedItem = nil
         } else if !searchText.isEmpty {
             searchText = ""
         } else {
@@ -63,9 +69,15 @@ final class AppState {
     func handleBackgroundClick() {
         if editorMode != nil {
             editorMode = nil
+        } else if expandedItem != nil {
+            expandedItem = nil
         } else {
             requestHide()
         }
+    }
+
+    func expand(_ item: LibraryEntry) {
+        expandedItem = item
     }
 
     func copyToClipboard(_ item: LibraryEntry) {

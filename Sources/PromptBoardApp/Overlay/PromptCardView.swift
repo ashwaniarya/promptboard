@@ -9,43 +9,37 @@ struct PromptCardView: View {
     @State private var justCopied = false
     @State private var copiedResetTask: Task<Void, Never>?
 
+    private let cardHeight: CGFloat = 168
+    private let accent = Color(red: 0.49, green: 0.51, blue: 1.0)
+
     private var isSkill: Bool { item.kind == .skill }
+    private var skillFiles: [SkillFile] {
+        if case .skill(let skill) = item { skill.files } else { [] }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(item.title)
-                    .font(.headline)
-                    .lineLimit(2)
-                if isSkill {
-                    Text("skill")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.75))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Capsule().fill(.white.opacity(0.12)))
-                }
-            }
-            Text(item.previewText.trimmingCharacters(in: .whitespacesAndNewlines))
-                .font(.system(size: 13))
-                .foregroundStyle(.secondary)
-                .lineLimit(12)
+            header
+            MarkdownText(markdown: item.previewText.trimmingCharacters(in: .whitespacesAndNewlines))
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .clipped()
+            if !skillFiles.isEmpty { fileChips }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(.white.opacity(isHovering ? 0.12 : 0.07))
-        )
+        .padding(12)
+        .frame(height: cardHeight, alignment: .top)
+        .background(RoundedRectangle(cornerRadius: 14).fill(.white.opacity(isHovering ? 0.11 : 0.06)))
         .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(.white.opacity(isHovering ? 0.22 : 0.10))
+            RoundedRectangle(cornerRadius: 14).strokeBorder(
+                isSkill ? accent.opacity(isHovering ? 0.55 : 0.30)
+                        : .white.opacity(isHovering ? 0.20 : 0.09)
+            )
         )
+        .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay(copiedBadge)
-        .overlay(alignment: .topTrailing) { deleteButton }
+        .overlay(alignment: .topTrailing) { hoverActions }
         .contentShape(Rectangle())
         .gesture(
-            TapGesture(count: 2).onEnded { beginEditingIfPrompt() }
+            TapGesture(count: 2).onEnded { beginEditOrExpand() }
                 .exclusively(before: TapGesture(count: 1).onEnded { copyItem() })
         )
         .onHover { hovering in
@@ -53,46 +47,99 @@ struct PromptCardView: View {
         }
     }
 
+    private var header: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            if isSkill {
+                Image(systemName: "puzzlepiece.extension.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(accent)
+            }
+            Text(item.title)
+                .font(.headline)
+                .lineLimit(1)
+            if isSkill {
+                Text("skill")
+                    .font(.system(size: 9.5, weight: .semibold))
+                    .foregroundStyle(accent)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(accent.opacity(0.16)))
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private var fileChips: some View {
+        HStack(spacing: 5) {
+            ForEach(skillFiles.prefix(3), id: \.relativePath) { file in
+                Text(file.relativePath)
+                    .font(.system(size: 9.5))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(.white.opacity(0.06)))
+                    .overlay(Capsule().strokeBorder(.white.opacity(0.08)))
+            }
+            if skillFiles.count > 3 {
+                Text("+\(skillFiles.count - 3)")
+                    .font(.system(size: 9.5))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var hoverActions: some View {
+        if isHovering {
+            HStack(spacing: 4) {
+                iconButton("arrow.up.left.and.arrow.down.right", help: "Expand") { openDetail() }
+                iconButton("xmark", help: isSkill ? "Delete skill" : "Delete prompt") {
+                    appState.deleteItem(id: item.id)
+                }
+            }
+            .padding(6)
+            .transition(.opacity)
+        }
+    }
+
+    private func iconButton(_ systemName: String, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.85))
+                .frame(width: 20, height: 20)
+                .background(Circle().fill(.black.opacity(0.45)))
+        }
+        .buttonStyle(.plain)
+        .help(help)
+    }
+
     @ViewBuilder
     private var copiedBadge: some View {
         if justCopied {
             HStack(spacing: 6) {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
                 Text("Copied")
             }
             .font(.callout.weight(.semibold))
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
-            .background(Capsule().fill(Color.black.opacity(0.75)))
+            .background(Capsule().fill(Color.black.opacity(0.78)))
             .overlay(Capsule().strokeBorder(.white.opacity(0.2)))
             .transition(.scale(scale: 0.8).combined(with: .opacity))
         }
     }
 
-    @ViewBuilder
-    private var deleteButton: some View {
-        if isHovering {
-            Button {
-                appState.deleteItem(id: item.id)
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 16))
-                    .foregroundStyle(.white.opacity(0.85), .black.opacity(0.6))
-            }
-            .buttonStyle(.plain)
-            .padding(6)
-            .transition(.opacity)
-            .help(isSkill ? "Delete skill" : "Delete prompt")
-        }
+    private func openDetail() {
+        appState.expand(item)
     }
 
-    private func beginEditingIfPrompt() {
-        // Skill editing arrives in Layer C; for now a skill's double-click copies like a single tap.
+    private func beginEditOrExpand() {
         if case .prompt(let prompt) = item {
             appState.beginEditing(prompt)
         } else {
-            copyItem()
+            appState.expand(item)
         }
     }
 

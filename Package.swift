@@ -10,10 +10,17 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.8.0"),
+        .package(url: "https://github.com/gonzalezreal/swift-markdown-ui", from: "2.0.0"),
     ],
     targets: [
         .target(name: "PromptBoardKit"),
-        .executableTarget(name: "PromptBoardApp", dependencies: ["PromptBoardKit"]),
+        .executableTarget(
+            name: "PromptBoardApp",
+            dependencies: [
+                "PromptBoardKit",
+                .product(name: "MarkdownUI", package: "swift-markdown-ui"),
+            ]
+        ),
         .executableTarget(
             name: "PromptBoardCLI",
             dependencies: [
