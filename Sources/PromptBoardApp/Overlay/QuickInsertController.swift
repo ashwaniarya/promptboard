@@ -72,16 +72,27 @@ final class QuickInsertController {
         return panel
     }
 
-    // D3 replaces the anchor with the caret rect; D2 uses the mouse location.
+    // Places the popup just below the caret; falls back to the mouse when the caret
+    // is unavailable. `topLeft` is the desired top-left corner in Cocoa coordinates.
     private func position(_ panel: OverlayPanel) {
         panel.layoutIfNeeded()
-        let anchor = NSEvent.mouseLocation
         let size = panel.frame.size
-        let screen = NSScreen.screens.first { NSMouseInRect(anchor, $0.frame, false) } ?? NSScreen.main
-        var origin = NSPoint(x: anchor.x, y: anchor.y - size.height)
+        let gap: CGFloat = 6
+
+        let topLeft: NSPoint
+        if let caret = CaretLocator.caretRect() {
+            topLeft = NSPoint(x: caret.minX, y: caret.minY - gap)
+        } else {
+            topLeft = NSEvent.mouseLocation
+        }
+
+        var origin = NSPoint(x: topLeft.x, y: topLeft.y - size.height)
+        let screen = NSScreen.screens.first { NSMouseInRect(topLeft, $0.frame, false) }
+            ?? NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) }
+            ?? NSScreen.main
         if let visible = screen?.visibleFrame {
-            origin.x = min(max(origin.x, visible.minX), visible.maxX - size.width)
-            origin.y = min(max(origin.y, visible.minY), visible.maxY - size.height)
+            origin.x = min(max(origin.x, visible.minX), max(visible.minX, visible.maxX - size.width))
+            origin.y = min(max(origin.y, visible.minY), max(visible.minY, visible.maxY - size.height))
         }
         panel.setFrameOrigin(origin)
     }
