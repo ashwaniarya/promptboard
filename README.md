@@ -1,13 +1,13 @@
 # PromptBoard
 
-A macOS prompt **and skill** manager that lives in your menu bar. Press **⌥Space** anywhere and a full-screen overlay appears over a blurred desktop, showing your prompts and skills as a Pinterest-style masonry grid.
+A macOS prompt **and skill** manager that lives in your menu bar. Press **⌥Space** anywhere and a full-screen overlay appears over a blurred desktop, showing your prompts and skills as **markdown-rendered cards**.
 
-- **Single-click** a card → copies the prompt to the clipboard (overlay stays open)
-- **Double-click** a card → edit it
-- **Two-finger scroll** → browse the grid
-- **Type** → live-search prompts (search is focused on open)
+- **Single-click** a card → copies the raw markdown to the clipboard (overlay stays open)
+- **Double-click** a prompt → edit · hover **⤢** → expand: a prompt shows full markdown, a skill shows its file tree beside its rendered `SKILL.md`
+- **Groups sidebar** filters the grid; the **column toggle** (2 / 3 / 4) sets density
+- **Type** → live-search across titles and bodies (focused on open)
 - **⌘N / +** → new prompt · hover **✕** → delete
-- **Esc** → clears search, then closes · **⌥Space** or click empty space → closes
+- **Esc** → closes the detail/editor, then clears search, then closes · **⌥Space** or empty-space click → closes
 
 ## Library layout
 
@@ -104,3 +104,6 @@ args = ["mcp"]
 13. Bundled app only: Launch at Login toggle flips the checkmark and appears in System Settings → General → Login Items.
 14. `promptboard add --title X --content Y` while the overlay is open → card appears within ~1s, no relaunch; an edit saved in the app shows up in `promptboard list` immediately.
 15. `promptboard import-skill <dir>` → a skill card appears within ~1s and a symlink lands in `~/.claude/skills/<name>` (unless a real folder of that name is already there, which is left untouched).
+16. Cards render markdown (headings, lists, **bold**, `code`, code blocks); single-click still copies the **raw** markdown.
+17. The column toggle (2 / 3 / 4) reflows the grid; the groups sidebar filters and shows live counts.
+18. Hover a card → **⤢** expands it: a prompt shows full markdown; a skill shows its file tree beside `SKILL.md` (select a file to view it). Esc or an outside click closes it.
