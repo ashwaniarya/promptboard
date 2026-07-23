@@ -196,4 +196,16 @@ struct LibraryStoreTests {
         #expect(!store.items.contains { $0.id == prompt.id })
         #expect(store.items.contains { $0.kind == .skill && $0.title == "convert-me" })
     }
+
+    @Test func skillFileTextIsNilForNonUTF8Content() {
+        let directory = temporaryDirectory()
+        let store = LibraryStore(directoryURL: directory, claudeSkillsURL: temporaryDirectory())
+        let skill = store.createSkill(name: "bin", description: "d", group: nil, body: "")!
+
+        _ = store.writeSkillFile(id: skill.id, relativePath: "notes.md", data: Data("hello".utf8))
+        _ = store.writeSkillFile(id: skill.id, relativePath: "logo.png", data: Data([0x89, 0x50, 0x4E, 0x47, 0x00, 0xFF, 0xFE]))
+
+        #expect(store.skillFileText(id: skill.id, relativePath: "notes.md") == "hello")
+        #expect(store.skillFileText(id: skill.id, relativePath: "logo.png") == nil)
+    }
 }

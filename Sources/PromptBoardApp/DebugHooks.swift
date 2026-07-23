@@ -15,6 +15,7 @@ enum DebugHooks {
     static let convertFirstPromptNotification = "com.arya.PromptBoard.debug.convertFirstPrompt"
     static let newSkillNotification = "com.arya.PromptBoard.debug.newSkill"
     static let confirmConvertFirstNotification = "com.arya.PromptBoard.debug.confirmConvertFirst"
+    static let addSampleFilesNotification = "com.arya.PromptBoard.debug.addSampleFiles"
 
     static var isEnabled: Bool {
         ProcessInfo.processInfo.environment["PROMPTBOARD_DEBUG"] == "1"
@@ -43,6 +44,7 @@ enum DebugHooks {
             (convertFirstPromptNotification, #selector(DebugHookTarget.handleConvertFirstPrompt(_:))),
             (newSkillNotification, #selector(DebugHookTarget.handleNewSkill(_:))),
             (confirmConvertFirstNotification, #selector(DebugHookTarget.handleConfirmConvertFirst(_:))),
+            (addSampleFilesNotification, #selector(DebugHookTarget.handleAddSampleFiles(_:))),
         ]
         for (name, selector) in hooks {
             center.addObserver(
@@ -182,6 +184,23 @@ private final class DebugHookTarget: NSObject {
                 prompt: prompt, name: prompt.title, description: "converted by harness", group: nil, keepOriginal: false
             )
             NSLog("%@", "PromptBoardDebug confirmConvertFirst -> \(prompt.title)")
+        }
+    }
+
+    @objc nonisolated func handleAddSampleFiles(_ notification: Notification) {
+        MainActor.assumeIsolated {
+            guard case .skill(let skill)? = appState.store.items.first(where: { $0.kind == .skill }) else {
+                NSLog("%@", "PromptBoardDebug addSampleFiles -> no skill")
+                return
+            }
+            _ = appState.store.writeSkillFile(id: skill.id, relativePath: "examples/note.md", data: Data("nested text".utf8))
+            _ = appState.store.writeSkillFile(id: skill.id, relativePath: "logo.png", data: Data([0x89, 0x50, 0x4E, 0x47, 0x00, 0xFF, 0xFE]))
+            let binaryText = appState.store.skillFileText(id: skill.id, relativePath: "logo.png")
+            var files: [String] = []
+            if case .skill(let refreshed)? = appState.store.items.first(where: { $0.id == skill.id }) {
+                files = refreshed.files.map(\.relativePath)
+            }
+            NSLog("%@", "PromptBoardDebug addSampleFiles -> files=\(files) binaryText=\(binaryText == nil ? "nil" : "text")")
         }
     }
 
