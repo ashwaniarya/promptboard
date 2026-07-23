@@ -34,10 +34,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         )
 
-        hotKeyManager = HotKeyManager { [weak self] in
+        hotKeyManager = HotKeyManager()
+        hotKeyManager.register(
+            keyCode: Constants.hotKeyKeyCode, modifiers: Constants.hotKeyModifiers, id: 1
+        ) { [weak self] in
             self?.overlayController.toggle()
         }
-        hotKeyManager.register()
+        hotKeyManager.register(
+            keyCode: Constants.quickInsertKeyCode, modifiers: Constants.quickInsertModifiers, id: 2
+        ) {
+            NSLog("%@", "PromptBoard: quick-insert hotkey (D1 stub)")
+        }
 
         DebugHooks.install(overlayController: overlayController, appState: appState)
 
