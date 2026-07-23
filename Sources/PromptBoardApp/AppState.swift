@@ -13,6 +13,7 @@ final class AppState {
     let store: LibraryStore
     var searchText = ""
     var columnCount = 3
+    var selectedGroup: String?
     private(set) var overlaySession = 0
 
     // SwiftUI @FocusState writes are ignored while the app is inactive — and a
@@ -40,8 +41,20 @@ final class AppState {
     }
 
     var visibleItems: [LibraryEntry] {
-        PromptFilter.filter(store.items, query: searchText)
+        var items = store.items
+        if let selectedGroup {
+            items = items.filter { $0.group == selectedGroup }
+        }
+        return PromptFilter.filter(items, query: searchText)
             .sorted { $0.updatedAt > $1.updatedAt }
+    }
+
+    var groupCounts: [(name: String, count: Int)] {
+        var counts: [String: Int] = [:]
+        for item in store.items {
+            if let group = item.group { counts[group, default: 0] += 1 }
+        }
+        return counts.map { (name: $0.key, count: $0.value) }.sorted { $0.name < $1.name }
     }
 
     func beginNewOverlaySession() {

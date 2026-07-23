@@ -12,11 +12,16 @@ struct OverlayRootView: View {
                 .contentShape(Rectangle())
                 .onTapGesture { appState.handleBackgroundClick() }
 
-            VStack(spacing: 28) {
-                searchBar
-                LibraryGridView(appState: appState)
+            HStack(spacing: 0) {
+                GroupSidebarView(appState: appState)
+                    .frame(width: 200)
+                VStack(spacing: 22) {
+                    searchBar
+                    LibraryGridView(appState: appState)
+                }
+                .padding(.top, 56)
+                .padding(.trailing, 8)
             }
-            .padding(.top, 64)
 
             if let editorMode = appState.editorMode {
                 editorLayer(editorMode)
@@ -46,7 +51,7 @@ struct OverlayRootView: View {
             .padding(.vertical, 10)
             .background(RoundedRectangle(cornerRadius: 12).fill(.white.opacity(0.08)))
             .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.white.opacity(0.12)))
-            .frame(maxWidth: 560)
+            .frame(maxWidth: .infinity)
 
             Button {
                 appState.beginCreating()
