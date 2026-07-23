@@ -10,6 +10,9 @@ enum DebugHooks {
     static let dumpStateNotification = "com.arya.PromptBoard.debug.dumpState"
     static let dumpPromptsNotification = "com.arya.PromptBoard.debug.dumpPrompts"
     static let expandFirstNotification = "com.arya.PromptBoard.debug.expandFirst"
+    static let createSampleSkillNotification = "com.arya.PromptBoard.debug.createSampleSkill"
+    static let editFirstSkillNotification = "com.arya.PromptBoard.debug.editFirstSkill"
+    static let convertFirstPromptNotification = "com.arya.PromptBoard.debug.convertFirstPrompt"
 
     static var isEnabled: Bool {
         ProcessInfo.processInfo.environment["PROMPTBOARD_DEBUG"] == "1"
@@ -33,6 +36,9 @@ enum DebugHooks {
             (dumpStateNotification, #selector(DebugHookTarget.handleDumpState(_:))),
             (dumpPromptsNotification, #selector(DebugHookTarget.handleDumpPrompts(_:))),
             (expandFirstNotification, #selector(DebugHookTarget.handleExpandFirst(_:))),
+            (createSampleSkillNotification, #selector(DebugHookTarget.handleCreateSampleSkill(_:))),
+            (editFirstSkillNotification, #selector(DebugHookTarget.handleEditFirstSkill(_:))),
+            (convertFirstPromptNotification, #selector(DebugHookTarget.handleConvertFirstPrompt(_:))),
         ]
         for (name, selector) in hooks {
             center.addObserver(
@@ -117,6 +123,40 @@ private final class DebugHookTarget: NSObject {
                 NSLog("%@", "PromptBoardDebug expandFirst -> \(target.title)")
                 appState.expand(target)
             }
+        }
+    }
+
+    @objc nonisolated func handleCreateSampleSkill(_ notification: Notification) {
+        let name = notification.object as? String ?? "harness-skill"
+        MainActor.assumeIsolated {
+            let skill = appState.store.createSkill(
+                name: name, description: "made by the debug harness", group: "Debug", body: "# \(name)\n\nBody."
+            )
+            NSLog("%@", "PromptBoardDebug createSampleSkill -> \(skill?.name ?? "nil")")
+        }
+    }
+
+    @objc nonisolated func handleEditFirstSkill(_ notification: Notification) {
+        MainActor.assumeIsolated {
+            overlayController.show()
+            guard case .skill(let skill)? = appState.store.items.first(where: { $0.kind == .skill }) else {
+                NSLog("%@", "PromptBoardDebug editFirstSkill -> no skill")
+                return
+            }
+            NSLog("%@", "PromptBoardDebug editFirstSkill -> \(skill.name)")
+            appState.beginEditingSkill(skill)
+        }
+    }
+
+    @objc nonisolated func handleConvertFirstPrompt(_ notification: Notification) {
+        MainActor.assumeIsolated {
+            overlayController.show()
+            guard case .prompt(let prompt)? = appState.store.items.first(where: { $0.kind == .prompt }) else {
+                NSLog("%@", "PromptBoardDebug convertFirstPrompt -> no prompt")
+                return
+            }
+            NSLog("%@", "PromptBoardDebug convertFirstPrompt -> \(prompt.title)")
+            appState.beginConverting(prompt)
         }
     }
 
