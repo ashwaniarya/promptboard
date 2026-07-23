@@ -9,6 +9,14 @@ A macOS prompt **and skill** manager that lives in your menu bar. Press **⌥Spa
 - **+** → new prompt (**⌘N**) or **new skill** · hover a skill **✎** → edit · hover a prompt **✦** → convert it into a skill · hover **✕** → delete
 - **Esc** → closes the editor/detail, then clears search, then closes · **⌥Space** or empty-space click → closes
 
+## Quick-insert at the cursor
+
+Press **⌥/** (option-slash) in any app to drop a compact search popup at your text caret. Type to filter your prompts — the slug doubles as a `/command` (e.g. `/code-review`) — then **↑↓** to choose and **⏎** to insert the prompt's text right where you were typing. **Esc** dismisses.
+
+- **Insert-at-caret needs Accessibility permission** (System Settings → Privacy & Security → **Accessibility** → enable PromptBoard). A fresh grant may need one relaunch. Until granted, the popup still works but **copies** the prompt to the clipboard (paste with ⌘V) and asks for access.
+- The popup lists **prompts only** — skills stay agent-invoked (via the `~/.claude/skills` symlink / MCP).
+- Insertion pastes via the clipboard and restores it afterward (text only). Positioning uses the Accessibility caret rect, falling back to the mouse when an app doesn't expose it.
+
 ## Library layout
 
 Everything lives as human-readable files under `~/Library/Application Support/PromptBoard/Library/`:
@@ -112,3 +120,5 @@ args = ["mcp"]
 20. A skill's detail → **Edit** (or hover a skill **✎**) → the editor loads name/description/group + the file rail. Change the body, **Save** → the card and `SKILL.md` update; the sidecar keeps the id.
 21. In the skill editor: **New** → `examples/ref.md` appears nested and editable; rename and delete it; **Import** pulls a file from disk; a non-text file shows "Binary file — rename or delete only". Rename the skill → its folder and `~/.claude/skills` symlink follow the new name (a foreign name is skipped with a warning).
 22. Hover a prompt **✦** → **Convert to skill** → name prefilled; add a description → **Convert** → a skill opens in the editor with the prompt's content as its `SKILL.md` body, and the original prompt is gone (unless "keep the original prompt" is checked).
+23. Grant Accessibility to PromptBoard, then in TextEdit press **⌥/** → a compact popup appears at the caret; type `/code-review` (or `review`) → the list ranks/filters; **⏎** inserts the prompt's text at the cursor and the clipboard is restored. ⌥Space board still works independently.
+24. Before granting Accessibility, ⌥/ → picking a prompt **copies** it and raises the permission prompt instead of inserting.
