@@ -208,7 +208,7 @@ public struct LibraryRepository: Sendable {
         Set(promptFileURLs().map { $0.deletingPathExtension().lastPathComponent })
     }
 
-    private func findPromptFile(id: UUID) throws -> (url: URL, prompt: Prompt)? {
+    func findPromptFile(id: UUID) throws -> (url: URL, prompt: Prompt)? {
         for url in promptFileURLs() {
             if let prompt = readPrompt(at: url), prompt.id == id {
                 return (url, prompt)
@@ -251,7 +251,7 @@ public struct LibraryRepository: Sendable {
         }
     }
 
-    private func ensureDirectory(_ url: URL) throws {
+    func ensureDirectory(_ url: URL) throws {
         do {
             try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         } catch {
