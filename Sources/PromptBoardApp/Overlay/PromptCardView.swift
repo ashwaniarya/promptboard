@@ -93,6 +93,11 @@ struct PromptCardView: View {
     private var hoverActions: some View {
         if isHovering {
             HStack(spacing: 4) {
+                if isSkill {
+                    iconButton("pencil", help: "Edit skill") { editSkill() }
+                } else {
+                    iconButton("puzzlepiece.extension", help: "Convert to skill") { convertPrompt() }
+                }
                 iconButton("arrow.up.left.and.arrow.down.right", help: "Expand") { openDetail() }
                 iconButton("xmark", help: isSkill ? "Delete skill" : "Delete prompt") {
                     appState.deleteItem(id: item.id)
@@ -101,6 +106,14 @@ struct PromptCardView: View {
             .padding(6)
             .transition(.opacity)
         }
+    }
+
+    private func editSkill() {
+        if case .skill(let skill) = item { appState.beginEditingSkill(skill) }
+    }
+
+    private func convertPrompt() {
+        if case .prompt(let prompt) = item { appState.beginConverting(prompt) }
     }
 
     private func iconButton(_ systemName: String, help: String, action: @escaping () -> Void) -> some View {

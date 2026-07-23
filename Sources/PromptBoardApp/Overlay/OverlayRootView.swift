@@ -30,6 +30,10 @@ struct OverlayRootView: View {
             } else if let expandedItem = appState.expandedItem {
                 detailLayer(expandedItem)
             }
+
+            if let convertingPrompt = appState.convertingPrompt {
+                convertLayer(convertingPrompt)
+            }
         }
         .ignoresSafeArea()
         .defaultFocus($searchFieldFocused, true)
@@ -128,6 +132,18 @@ struct OverlayRootView: View {
                 onCancel: { appState.editorMode = nil }
             )
             .id(editorMode)
+        }
+        .transition(.opacity)
+    }
+
+    private func convertLayer(_ prompt: Prompt) -> some View {
+        ZStack {
+            Color.black.opacity(0.4)
+                .contentShape(Rectangle())
+                .onTapGesture { appState.convertingPrompt = nil }
+
+            ConvertPromptSheet(prompt: prompt, appState: appState)
+                .id(prompt.id)
         }
         .transition(.opacity)
     }
