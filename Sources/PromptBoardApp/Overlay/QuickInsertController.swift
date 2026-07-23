@@ -8,13 +8,11 @@ import PromptBoardKit
 @MainActor
 final class QuickInsertController {
     let model: QuickInsertModel
-    private let insertText: (String) -> Void
     private var panel: OverlayPanel?
     private var keyMonitor: Any?
 
-    init(store: LibraryStore, insertText: @escaping (String) -> Void) {
+    init(store: LibraryStore) {
         self.model = QuickInsertModel(store: store)
-        self.insertText = insertText
     }
 
     var isVisible: Bool { panel?.isVisible ?? false }
@@ -37,7 +35,24 @@ final class QuickInsertController {
     private func insert(_ prompt: Prompt) {
         let text = prompt.content
         hide()
-        insertText(text)
+        // Let focus return to the previously-active app before pasting.
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(60))
+            self?.performInsert(text)
+        }
+    }
+
+    // Paste at the caret when trusted; otherwise copy to the clipboard and prompt
+    // for Accessibility so the next insert lands at the cursor.
+    private func performInsert(_ text: String) {
+        if AccessibilityAuthorizer.isTrusted {
+            TextInserter.insert(text)
+        } else {
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.setString(text, forType: .string)
+            AccessibilityAuthorizer.promptIfNeeded()
+        }
     }
 
     private func insertSelected() {

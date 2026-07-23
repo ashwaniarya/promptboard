@@ -24,12 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         libraryStore.startWatchingForExternalChanges()
         appState = AppState(store: libraryStore)
         overlayController = OverlayController(appState: appState)
-        quickInsertController = QuickInsertController(store: libraryStore, insertText: { text in
-            // D2 placeholder — copy to the clipboard. D4 swaps in TextInserter (paste at caret).
-            let pasteboard = NSPasteboard.general
-            pasteboard.clearContents()
-            pasteboard.setString(text, forType: .string)
-        })
+        quickInsertController = QuickInsertController(store: libraryStore)
 
         statusItemController = StatusItemController(
             onOpen: { [weak self] in

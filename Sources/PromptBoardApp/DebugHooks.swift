@@ -17,6 +17,7 @@ enum DebugHooks {
     static let confirmConvertFirstNotification = "com.arya.PromptBoard.debug.confirmConvertFirst"
     static let addSampleFilesNotification = "com.arya.PromptBoard.debug.addSampleFiles"
     static let quickInsertNotification = "com.arya.PromptBoard.debug.quickInsert"
+    static let testInsertClipboardNotification = "com.arya.PromptBoard.debug.testInsertClipboard"
 
     static var isEnabled: Bool {
         ProcessInfo.processInfo.environment["PROMPTBOARD_DEBUG"] == "1"
@@ -49,6 +50,7 @@ enum DebugHooks {
             (confirmConvertFirstNotification, #selector(DebugHookTarget.handleConfirmConvertFirst(_:))),
             (addSampleFilesNotification, #selector(DebugHookTarget.handleAddSampleFiles(_:))),
             (quickInsertNotification, #selector(DebugHookTarget.handleQuickInsert(_:))),
+            (testInsertClipboardNotification, #selector(DebugHookTarget.handleTestInsertClipboard(_:))),
         ]
         for (name, selector) in hooks {
             center.addObserver(
@@ -200,6 +202,22 @@ private final class DebugHookTarget: NSObject {
             if let query { quickInsertController.model.query = query }
             let results = quickInsertController.model.results
             NSLog("%@", "PromptBoardDebug quickInsert query=\(query ?? "") results=\(results.count): \(results.map(\.title).joined(separator: " | "))")
+        }
+    }
+
+    @objc nonisolated func handleTestInsertClipboard(_ notification: Notification) {
+        MainActor.assumeIsolated {
+            let trusted = AccessibilityAuthorizer.isTrusted
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.setString("SENTINEL-CLIP", forType: .string)
+            TextInserter.insert("HARNESS-INSERTED")
+            let immediate = pasteboard.string(forType: .string) ?? "nil"
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(250))
+                let restored = NSPasteboard.general.string(forType: .string) ?? "nil"
+                NSLog("%@", "PromptBoardDebug testInsertClipboard trusted=\(trusted) immediate=\(immediate) restored=\(restored)")
+            }
         }
     }
 
