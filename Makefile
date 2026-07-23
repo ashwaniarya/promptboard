@@ -1,9 +1,12 @@
 BIN_DIR ?= $(HOME)/.local/bin
 
-.PHONY: build test run app cli install clean
+.PHONY: build test run app cli install clean signing-identity
 
 build:
 	swift build
+
+signing-identity:
+	./scripts/setup-signing-identity.sh
 
 test:
 	swift test

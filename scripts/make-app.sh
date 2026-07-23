@@ -43,6 +43,15 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<'PLIST'
 </plist>
 PLIST
 
-codesign --force --sign - "$APP_BUNDLE"
+# Prefer the stable self-signed identity so macOS keeps the Accessibility grant
+# across rebuilds; fall back to ad-hoc if it hasn't been set up on this machine.
+SIGNING_IDENTITY="PromptBoard Local Signing"
+if security find-certificate -c "$SIGNING_IDENTITY" >/dev/null 2>&1; then
+    codesign --force --sign "$SIGNING_IDENTITY" --identifier com.arya.PromptBoard "$APP_BUNDLE"
+    echo "Signed with '$SIGNING_IDENTITY' — the Accessibility grant persists across reinstalls."
+else
+    codesign --force --sign - "$APP_BUNDLE"
+    echo "Signed ad-hoc. Run 'make signing-identity' so the Accessibility grant survives future reinstalls."
+fi
 
 echo "Built $APP_BUNDLE"
