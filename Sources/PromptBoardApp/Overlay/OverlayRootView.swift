@@ -57,18 +57,26 @@ struct OverlayRootView: View {
             .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.white.opacity(0.12)))
             .frame(maxWidth: .infinity)
 
-            Button {
-                appState.beginCreating()
+            Menu {
+                Button("New skill") { appState.beginCreatingSkill() }
             } label: {
                 Image(systemName: "plus")
                     .font(.title3.weight(.semibold))
                     .frame(width: 40, height: 40)
                     .background(Circle().fill(.white.opacity(0.08)))
                     .overlay(Circle().strokeBorder(.white.opacity(0.12)))
+            } primaryAction: {
+                appState.beginCreating()
             }
-            .buttonStyle(.plain)
-            .keyboardShortcut("n", modifiers: .command)
-            .help("New Prompt (⌘N)")
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("New (⌘N for prompt)")
+            .background(
+                Button("") { appState.beginCreating() }
+                    .keyboardShortcut("n", modifiers: .command)
+                    .hidden()
+            )
 
             columnToggle
         }
