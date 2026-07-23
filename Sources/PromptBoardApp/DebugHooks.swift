@@ -13,6 +13,8 @@ enum DebugHooks {
     static let createSampleSkillNotification = "com.arya.PromptBoard.debug.createSampleSkill"
     static let editFirstSkillNotification = "com.arya.PromptBoard.debug.editFirstSkill"
     static let convertFirstPromptNotification = "com.arya.PromptBoard.debug.convertFirstPrompt"
+    static let newSkillNotification = "com.arya.PromptBoard.debug.newSkill"
+    static let confirmConvertFirstNotification = "com.arya.PromptBoard.debug.confirmConvertFirst"
 
     static var isEnabled: Bool {
         ProcessInfo.processInfo.environment["PROMPTBOARD_DEBUG"] == "1"
@@ -39,6 +41,8 @@ enum DebugHooks {
             (createSampleSkillNotification, #selector(DebugHookTarget.handleCreateSampleSkill(_:))),
             (editFirstSkillNotification, #selector(DebugHookTarget.handleEditFirstSkill(_:))),
             (convertFirstPromptNotification, #selector(DebugHookTarget.handleConvertFirstPrompt(_:))),
+            (newSkillNotification, #selector(DebugHookTarget.handleNewSkill(_:))),
+            (confirmConvertFirstNotification, #selector(DebugHookTarget.handleConfirmConvertFirst(_:))),
         ]
         for (name, selector) in hooks {
             center.addObserver(
@@ -157,6 +161,27 @@ private final class DebugHookTarget: NSObject {
             }
             NSLog("%@", "PromptBoardDebug convertFirstPrompt -> \(prompt.title)")
             appState.beginConverting(prompt)
+        }
+    }
+
+    @objc nonisolated func handleNewSkill(_ notification: Notification) {
+        MainActor.assumeIsolated {
+            overlayController.show()
+            appState.beginCreatingSkill()
+            NSLog("%@", "PromptBoardDebug newSkill")
+        }
+    }
+
+    @objc nonisolated func handleConfirmConvertFirst(_ notification: Notification) {
+        MainActor.assumeIsolated {
+            guard case .prompt(let prompt)? = appState.store.items.first(where: { $0.kind == .prompt }) else {
+                NSLog("%@", "PromptBoardDebug confirmConvertFirst -> no prompt")
+                return
+            }
+            appState.confirmConvert(
+                prompt: prompt, name: prompt.title, description: "converted by harness", group: nil, keepOriginal: false
+            )
+            NSLog("%@", "PromptBoardDebug confirmConvertFirst -> \(prompt.title)")
         }
     }
 
