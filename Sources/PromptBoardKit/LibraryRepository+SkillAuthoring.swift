@@ -22,6 +22,38 @@ extension LibraryRepository {
         }
     }
 
+    // Creates a skill from a prompt's content, then (optionally) removes the prompt.
+    // Skill-first under one lock, so a mid-flow failure never loses the prompt.
+    @discardableResult
+    public func promotePromptToSkill(
+        promptID: UUID, name: String, description: String, group: String?, removingPrompt: Bool
+    ) throws -> Skill {
+        try withExclusiveLock {
+            guard let found = try findPromptFile(id: promptID) else {
+                throw LibraryRepositoryError.promptNotFound(promptID)
+            }
+            let folderName = Slug.unique(Slug.make(from: name), existing: existingSkillFolderNames())
+            try ensureDirectory(skillsDirectoryURL)
+            let destination = skillFolderURL(name: folderName)
+            try ensureDirectory(destination)
+            try writeSkillMarkdown(name: folderName, description: description, body: found.prompt.content, in: destination)
+            let now = Date()
+            try writeSidecar(SkillSidecar(id: UUID(), group: group, createdAt: now, updatedAt: now), in: destination)
+            linkSkill(at: destination, name: folderName)
+            if removingPrompt {
+                do {
+                    try FileManager.default.removeItem(at: found.url)
+                } catch {
+                    throw LibraryRepositoryError.ioFailure(underlying: error)
+                }
+            }
+            guard let skill = readSkill(at: destination) else {
+                throw LibraryRepositoryError.invalidSkillSource(path: destination.path)
+            }
+            return skill
+        }
+    }
+
     @discardableResult
     public func updateSkill(id: UUID, name: String, description: String, group: String?, body: String) throws -> Skill {
         try withExclusiveLock {
