@@ -18,6 +18,10 @@ public final class LibraryStore {
         LibraryRepository.defaultDirectoryURL
     }
 
+    public var prompts: [Prompt] {
+        items.compactMap { if case .prompt(let prompt) = $0 { prompt } else { nil } }
+    }
+
     public var groups: [String] {
         var seen = Set<String>()
         var ordered: [String] = []

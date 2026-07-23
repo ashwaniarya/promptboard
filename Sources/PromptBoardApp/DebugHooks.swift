@@ -16,6 +16,7 @@ enum DebugHooks {
     static let newSkillNotification = "com.arya.PromptBoard.debug.newSkill"
     static let confirmConvertFirstNotification = "com.arya.PromptBoard.debug.confirmConvertFirst"
     static let addSampleFilesNotification = "com.arya.PromptBoard.debug.addSampleFiles"
+    static let quickInsertNotification = "com.arya.PromptBoard.debug.quickInsert"
 
     static var isEnabled: Bool {
         ProcessInfo.processInfo.environment["PROMPTBOARD_DEBUG"] == "1"
@@ -23,9 +24,11 @@ enum DebugHooks {
 
     private static var target: DebugHookTarget?
 
-    static func install(overlayController: OverlayController, appState: AppState) {
+    static func install(overlayController: OverlayController, appState: AppState, quickInsertController: QuickInsertController) {
         guard isEnabled else { return }
-        let target = DebugHookTarget(overlayController: overlayController, appState: appState)
+        let target = DebugHookTarget(
+            overlayController: overlayController, appState: appState, quickInsertController: quickInsertController
+        )
         self.target = target
 
         // Selector observers with .deliverImmediately: the block-based API defaults to
@@ -45,6 +48,7 @@ enum DebugHooks {
             (newSkillNotification, #selector(DebugHookTarget.handleNewSkill(_:))),
             (confirmConvertFirstNotification, #selector(DebugHookTarget.handleConfirmConvertFirst(_:))),
             (addSampleFilesNotification, #selector(DebugHookTarget.handleAddSampleFiles(_:))),
+            (quickInsertNotification, #selector(DebugHookTarget.handleQuickInsert(_:))),
         ]
         for (name, selector) in hooks {
             center.addObserver(
@@ -63,10 +67,12 @@ enum DebugHooks {
 private final class DebugHookTarget: NSObject {
     private let overlayController: OverlayController
     private let appState: AppState
+    private let quickInsertController: QuickInsertController
 
-    init(overlayController: OverlayController, appState: AppState) {
+    init(overlayController: OverlayController, appState: AppState, quickInsertController: QuickInsertController) {
         self.overlayController = overlayController
         self.appState = appState
+        self.quickInsertController = quickInsertController
     }
 
     @objc nonisolated func handleToggle(_ notification: Notification) {
@@ -184,6 +190,16 @@ private final class DebugHookTarget: NSObject {
                 prompt: prompt, name: prompt.title, description: "converted by harness", group: nil, keepOriginal: false
             )
             NSLog("%@", "PromptBoardDebug confirmConvertFirst -> \(prompt.title)")
+        }
+    }
+
+    @objc nonisolated func handleQuickInsert(_ notification: Notification) {
+        let query = notification.object as? String
+        MainActor.assumeIsolated {
+            quickInsertController.trigger()
+            if let query { quickInsertController.model.query = query }
+            let results = quickInsertController.model.results
+            NSLog("%@", "PromptBoardDebug quickInsert query=\(query ?? "") results=\(results.count): \(results.map(\.title).joined(separator: " | "))")
         }
     }
 

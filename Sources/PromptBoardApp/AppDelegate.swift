@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var overlayController: OverlayController!
     private var statusItemController: StatusItemController!
     private var hotKeyManager: HotKeyManager!
+    private var quickInsertController: QuickInsertController!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -23,6 +24,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         libraryStore.startWatchingForExternalChanges()
         appState = AppState(store: libraryStore)
         overlayController = OverlayController(appState: appState)
+        quickInsertController = QuickInsertController(store: libraryStore, insertText: { text in
+            // D2 placeholder — copy to the clipboard. D4 swaps in TextInserter (paste at caret).
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.setString(text, forType: .string)
+        })
 
         statusItemController = StatusItemController(
             onOpen: { [weak self] in
@@ -42,11 +49,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         hotKeyManager.register(
             keyCode: Constants.quickInsertKeyCode, modifiers: Constants.quickInsertModifiers, id: 2
-        ) {
-            NSLog("%@", "PromptBoard: quick-insert hotkey (D1 stub)")
+        ) { [weak self] in
+            self?.quickInsertController.trigger()
         }
 
-        DebugHooks.install(overlayController: overlayController, appState: appState)
+        DebugHooks.install(
+            overlayController: overlayController, appState: appState, quickInsertController: quickInsertController
+        )
 
         if ProcessInfo.processInfo.environment["PROMPTBOARD_SHOW_ON_LAUNCH"] == "1" {
             overlayController.show()
