@@ -42,6 +42,19 @@ final class QuickInsertController {
         }
     }
 
+    // Debug-only: insert the top result for a query directly, without showing the
+    // popup, so the target app keeps focus during harness end-to-end verification.
+    func debugInsertFirst(query: String) {
+        model.query = query
+        model.selectedIndex = 0
+        guard let prompt = model.selected else {
+            NSLog("%@", "PromptBoardDebug debugInsertFirst: no result for \(query)")
+            return
+        }
+        NSLog("%@", "PromptBoardDebug debugInsertFirst inserting: \(prompt.title)")
+        performInsert(prompt.content)
+    }
+
     // Paste at the caret when trusted; otherwise copy to the clipboard and prompt
     // for Accessibility so the next insert lands at the cursor.
     private func performInsert(_ text: String) {

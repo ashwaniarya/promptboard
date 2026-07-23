@@ -18,6 +18,7 @@ enum DebugHooks {
     static let addSampleFilesNotification = "com.arya.PromptBoard.debug.addSampleFiles"
     static let quickInsertNotification = "com.arya.PromptBoard.debug.quickInsert"
     static let testInsertClipboardNotification = "com.arya.PromptBoard.debug.testInsertClipboard"
+    static let insertFirstResultNotification = "com.arya.PromptBoard.debug.insertFirstResult"
 
     static var isEnabled: Bool {
         ProcessInfo.processInfo.environment["PROMPTBOARD_DEBUG"] == "1"
@@ -51,6 +52,7 @@ enum DebugHooks {
             (addSampleFilesNotification, #selector(DebugHookTarget.handleAddSampleFiles(_:))),
             (quickInsertNotification, #selector(DebugHookTarget.handleQuickInsert(_:))),
             (testInsertClipboardNotification, #selector(DebugHookTarget.handleTestInsertClipboard(_:))),
+            (insertFirstResultNotification, #selector(DebugHookTarget.handleInsertFirstResult(_:))),
         ]
         for (name, selector) in hooks {
             center.addObserver(
@@ -202,6 +204,13 @@ private final class DebugHookTarget: NSObject {
             if let query { quickInsertController.model.query = query }
             let results = quickInsertController.model.results
             NSLog("%@", "PromptBoardDebug quickInsert query=\(query ?? "") results=\(results.count): \(results.map(\.title).joined(separator: " | "))")
+        }
+    }
+
+    @objc nonisolated func handleInsertFirstResult(_ notification: Notification) {
+        let query = notification.object as? String ?? ""
+        MainActor.assumeIsolated {
+            quickInsertController.debugInsertFirst(query: query)
         }
     }
 
