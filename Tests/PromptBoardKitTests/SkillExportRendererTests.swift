@@ -99,6 +99,12 @@ struct SkillExportRendererTests {
         #expect(document.fields["description"] == "\"\(expectedDescription("Line1 Line2"))\"")
     }
 
+    @Test func lineSeparatorInTitleIsFlattenedToSpace() {
+        let export = SkillExportRenderer.render(prompt(title: "Line1\u{2028}Line2"))
+        let document = Frontmatter.parse(export.skillMarkdown)
+        #expect(document.fields["description"] == "\"\(expectedDescription("Line1 Line2"))\"")
+    }
+
     @Test func escapeCharacterInTitleIsReplacedWithSpace() {
         let export = SkillExportRenderer.render(prompt(title: "Red\u{1B}[31mText"))
         let document = Frontmatter.parse(export.skillMarkdown)
