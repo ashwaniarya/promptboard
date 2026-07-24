@@ -19,8 +19,12 @@ public struct SyncTargets: Sendable, Equatable {
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> SyncTargets {
         let home = FileManager.default.homeDirectoryForCurrentUser
+        // A blank/whitespace-only or relative override resolves against the process's
+        // working directory instead of a real skills folder, so it's treated as unset
+        // rather than honoured — these paths are used to write symlinks into.
         func directory(_ key: String, fallback: String) -> URL {
-            if let override = environment[key], !override.isEmpty {
+            let override = environment[key]?.trimmingCharacters(in: .whitespaces) ?? ""
+            if !override.isEmpty, override.hasPrefix("/") {
                 return URL(fileURLWithPath: override, isDirectory: true)
             }
             return home.appendingPathComponent(fallback, isDirectory: true)

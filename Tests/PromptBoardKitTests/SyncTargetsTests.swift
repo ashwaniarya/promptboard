@@ -26,12 +26,12 @@ struct SyncTargetsTests {
         #expect(targets.agentsSkillsURL.path == "/tmp/a")
     }
 
-    @Test func temporaryTargetsAreDistinctAndOutsideTheHomeDirectory() {
+    @Test func temporaryTargetsAreDistinctAndRootedUnderTheSystemTemporaryDirectory() {
         let targets = SyncTargets.temporary()
         #expect(targets.claudeSkillsURL != targets.agentsSkillsURL)
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        #expect(!targets.claudeSkillsURL.path.hasPrefix(home + "/.claude"))
-        #expect(!targets.agentsSkillsURL.path.hasPrefix(home + "/.agents"))
+        let tmpDirectory = NSTemporaryDirectory()
+        #expect(targets.claudeSkillsURL.path.hasPrefix(tmpDirectory))
+        #expect(targets.agentsSkillsURL.path.hasPrefix(tmpDirectory))
     }
 
     @Test func repeatedTemporaryCallsProduceFreshRootsSoParallelTestsCannotCollide() {
@@ -55,5 +55,32 @@ struct SyncTargetsTests {
         let home = FileManager.default.homeDirectoryForCurrentUser
         #expect(targets.claudeSkillsURL == home.appendingPathComponent(".claude/skills", isDirectory: true))
         #expect(targets.agentsSkillsURL == home.appendingPathComponent(".agents/skills", isDirectory: true))
+    }
+
+    @Test func whitespaceOnlyOverrideFallsBackInsteadOfProducingACwdRelativePath() {
+        let targets = SyncTargets.systemDefault(environment: [
+            "PROMPTBOARD_CLAUDE_SKILLS_DIR": "   ",
+            "PROMPTBOARD_AGENTS_SKILLS_DIR": "/tmp/a",
+        ])
+        #expect(targets.claudeSkillsURL.path.hasSuffix("/.claude/skills"))
+        #expect(targets.agentsSkillsURL.path == "/tmp/a")
+    }
+
+    @Test func relativeOverrideFallsBackRatherThanResolvingAgainstTheWorkingDirectory() {
+        let targets = SyncTargets.systemDefault(environment: [
+            "PROMPTBOARD_CLAUDE_SKILLS_DIR": "relative/path",
+            "PROMPTBOARD_AGENTS_SKILLS_DIR": "/tmp/a",
+        ])
+        #expect(targets.claudeSkillsURL.path.hasSuffix("/.claude/skills"))
+        #expect(targets.agentsSkillsURL.path == "/tmp/a")
+    }
+
+    @Test func overrideWithSurroundingWhitespaceIsTrimmedAndHonoured() {
+        let targets = SyncTargets.systemDefault(environment: [
+            "PROMPTBOARD_CLAUDE_SKILLS_DIR": "  /tmp/c  ",
+            "PROMPTBOARD_AGENTS_SKILLS_DIR": "/tmp/a",
+        ])
+        #expect(targets.claudeSkillsURL.path == "/tmp/c")
+        #expect(targets.agentsSkillsURL.path == "/tmp/a")
     }
 }
