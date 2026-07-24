@@ -151,8 +151,8 @@ public enum SkillExportRenderer {
         let description = makeDescription(title: prompt.title)
         let markdown = Frontmatter.render(
             fields: [
-                ("name", folderName),
-                ("description", yamlScalar(description)),
+                ("name", quotedScalar(folderName)),
+                ("description", quotedScalar(description)),
                 ("disable-model-invocation", "true"),
             ],
             body: prompt.content
@@ -167,19 +167,24 @@ public enum SkillExportRenderer {
         while capped.hasSuffix("-") {
             capped.removeLast()
         }
-        return capped.isEmpty ? "untitled" : capped
+        return capped
     }
 
     static func makeDescription(title: String) -> String {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let base = trimmed.isEmpty ? "Untitled" : trimmed
-        let flattened = base.replacingOccurrences(of: "\n", with: " ")
+        let flattened = base
+            .replacingOccurrences(of: "\r\n", with: " ")
+            .replacingOccurrences(of: "\r", with: " ")
+            .replacingOccurrences(of: "\n", with: " ")
         return String("\(flattened). Saved PromptBoard prompt, user-invoked only.".prefix(descriptionLimit))
     }
 
-    static func yamlScalar(_ value: String) -> String {
-        let needsQuoting = value.contains(":") || value.contains("#") || value.hasPrefix(" ")
-        guard needsQuoting else { return value }
+    // Always quote rather than blocklisting unsafe characters. A leading ", [, !, >
+    // or a bare `no`/`123` is either invalid YAML or silently reparsed as a bool or
+    // number — and a non-string `name` is exactly what makes OpenCode drop a skill.
+    // disable-model-invocation stays unquoted because it is a genuine boolean.
+    static func quotedScalar(_ value: String) -> String {
         let escaped = value
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")
@@ -196,9 +201,11 @@ public enum SkillExportRenderer {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `swift test --filter SkillExportRendererTests`
-Expected: PASS, 8 tests.
+Expected: PASS.
 
-Note: `descriptionWithColonIsQuotedSoYamlStaysValid` asserts on the raw markdown rather than the parsed field, because `Frontmatter.parse` splits on the first colon and returns the value with its surrounding quotes intact.
+**As built (13 tests):** review of the first cut found that quoting only on `:`/`#`/leading-space still emitted invalid YAML for a title like `[Draft] Blog Post` or one starting with `"`, and silently-wrong YAML for a leading `!` or `>`; separately, a folder name of `no` or `123` parsed as a boolean/integer rather than a string. The always-quote rule above replaced the blocklist, and five regression tests were added for those cases plus a `\r` title.
+
+Assertions on `name` and `description` must read the raw `skillMarkdown`, not `Frontmatter.parse` — that helper splits on the first colon and never unquotes, which is precisely why the original bugs went undetected.
 
 - [ ] **Step 5: Commit**
 
