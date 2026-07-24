@@ -83,4 +83,12 @@ struct SkillExportRendererTests {
         let export = SkillExportRenderer.render(prompt(title: "Line1\rLine2"))
         #expect(export.skillMarkdown.contains("description: \"Line1 Line2. Saved PromptBoard prompt, user-invoked only.\""))
     }
+
+    @Test func escapeCharacterInTitleIsStrippedFromOutput() throws {
+        let export = SkillExportRenderer.render(prompt(title: "Broken \u{1B}[31mRed\u{1B}[0m Text"))
+        let descriptionLine = try #require(export.skillMarkdown.split(separator: "\n").first { $0.hasPrefix("description: ") })
+        #expect(!descriptionLine.unicodeScalars.contains { CharacterSet.controlCharacters.contains($0) })
+        let document = Frontmatter.parse(export.skillMarkdown)
+        #expect(document.fields["disable-model-invocation"] == "true")
+    }
 }

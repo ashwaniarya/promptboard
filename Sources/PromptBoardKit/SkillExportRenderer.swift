@@ -52,7 +52,19 @@ public enum SkillExportRenderer {
             .replacingOccurrences(of: "\r\n", with: " ")
             .replacingOccurrences(of: "\r", with: " ")
             .replacingOccurrences(of: "\n", with: " ")
-        return String("\(flattened). Saved PromptBoard prompt, user-invoked only.".prefix(descriptionLimit))
+        // Control characters (NUL, ESC, DEL, ...) are illegal in YAML even inside a
+        // quoted scalar, so quoting alone doesn't make them safe.
+        let sanitized = stripControlCharacters(from: flattened)
+        return String("\(sanitized). Saved PromptBoard prompt, user-invoked only.".prefix(descriptionLimit))
+    }
+
+    static func stripControlCharacters(from value: String) -> String {
+        let space: Unicode.Scalar = " "
+        var scalars = String.UnicodeScalarView()
+        for scalar in value.unicodeScalars {
+            scalars.append(CharacterSet.controlCharacters.contains(scalar) ? space : scalar)
+        }
+        return String(scalars)
     }
 
     static func quotedScalar(_ value: String) -> String {
