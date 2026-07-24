@@ -3,8 +3,14 @@ import Testing
 @testable import PromptBoardKit
 
 struct SkillExportRendererTests {
+    private let descriptionSuffix = ". Saved PromptBoard prompt, user-invoked only."
+
     private func prompt(title: String, content: String = "Body text.") -> Prompt {
         Prompt(title: title, content: content)
+    }
+
+    private func expectedDescription(_ content: String) -> String {
+        "\(content)\(descriptionSuffix)"
     }
 
     @Test func folderNameIsTheTitleSlug() {
@@ -14,9 +20,9 @@ struct SkillExportRendererTests {
 
     @Test func emitsNameDescriptionAndInvocationOptOut() {
         let export = SkillExportRenderer.render(prompt(title: "Code Review"))
-        #expect(export.skillMarkdown.contains("name: \"code-review\"\n"))
-        #expect(export.skillMarkdown.contains("description: \"Code Review. Saved PromptBoard prompt, user-invoked only.\"\n"))
         let document = Frontmatter.parse(export.skillMarkdown)
+        #expect(document.fields["name"] == "\"code-review\"")
+        #expect(document.fields["description"] == "\"\(expectedDescription("Code Review"))\"")
         #expect(document.fields["disable-model-invocation"] == "true")
     }
 
@@ -28,29 +34,25 @@ struct SkillExportRendererTests {
         #expect(!export.skillMarkdown.contains("updatedAt"))
     }
 
-    @Test func descriptionWithColonIsQuotedSoYamlStaysValid() {
-        let export = SkillExportRenderer.render(prompt(title: "Ratio: 2:1"))
-        #expect(export.skillMarkdown.contains("description: \"Ratio: 2:1. Saved PromptBoard prompt, user-invoked only.\""))
-    }
-
     @Test func descriptionIsNeverEmpty() {
         let export = SkillExportRenderer.render(prompt(title: "   "))
-        #expect(export.skillMarkdown.contains("description: \"Untitled. Saved PromptBoard prompt, user-invoked only.\""))
+        let document = Frontmatter.parse(export.skillMarkdown)
+        #expect(document.fields["description"] == "\"\(expectedDescription("Untitled"))\"")
     }
 
     @Test func nameIsCappedAtCodexLimit() {
-        let export = SkillExportRenderer.render(prompt(title: String(repeating: "word ", count: 40)))
+        let export = SkillExportRenderer.render(prompt(title: String(repeating: "abc ", count: 20)))
         #expect(export.folderName.count <= 64)
         #expect(!export.folderName.hasSuffix("-"))
     }
 
     @Test func descriptionIsCappedAtCodexLimit() throws {
         let export = SkillExportRenderer.render(prompt(title: String(repeating: "x", count: 2000)))
-        let line = try #require(export.skillMarkdown.split(separator: "\n").first { $0.hasPrefix("description: ") })
-        let quoted = line.dropFirst("description: ".count)
-        #expect(quoted.hasPrefix("\""))
-        #expect(quoted.hasSuffix("\""))
-        #expect(quoted.dropFirst().dropLast().count <= 1024)
+        let document = Frontmatter.parse(export.skillMarkdown)
+        let quotedDescription = try #require(document.fields["description"])
+        let content = quotedDescription.dropFirst().dropLast()
+        #expect(content.count <= 1024)
+        #expect(content.hasSuffix(descriptionSuffix))
     }
 
     @Test func openAIPolicyDisablesImplicitInvocation() {
@@ -58,14 +60,14 @@ struct SkillExportRendererTests {
         #expect(export.openAIPolicy.contains("allow_implicit_invocation: false"))
     }
 
-    @Test func leadingBracketNoLongerBreaksYAML() {
+    @Test func leadingBracketInTitleIsQuoted() {
         let export = SkillExportRenderer.render(prompt(title: "[Draft] Blog Post"))
-        #expect(export.skillMarkdown.contains("description: \"[Draft] Blog Post. Saved PromptBoard prompt, user-invoked only.\""))
+        #expect(export.skillMarkdown.contains("description: \"\(expectedDescription("[Draft] Blog Post"))\""))
     }
 
     @Test func leadingAndEmbeddedQuotesAreEscaped() {
         let export = SkillExportRenderer.render(prompt(title: "\"Explain Like I'm Five\" Rewrite"))
-        #expect(export.skillMarkdown.contains("description: \"\\\"Explain Like I'm Five\\\" Rewrite. Saved PromptBoard prompt, user-invoked only.\""))
+        #expect(export.skillMarkdown.contains("description: \"\\\"Explain Like I'm Five\\\" Rewrite\(descriptionSuffix)\""))
     }
 
     @Test func nameThatWouldParseAsYAMLBooleanStaysQuotedString() {
@@ -76,19 +78,36 @@ struct SkillExportRendererTests {
 
     @Test func descriptionWithColonAndQuoteEscapesBoth() {
         let export = SkillExportRenderer.render(prompt(title: "Say \"hello\": now"))
-        #expect(export.skillMarkdown.contains("description: \"Say \\\"hello\\\": now. Saved PromptBoard prompt, user-invoked only.\""))
+        #expect(export.skillMarkdown.contains("description: \"Say \\\"hello\\\": now\(descriptionSuffix)\""))
     }
 
     @Test func carriageReturnInTitleIsFlattenedToSpace() {
         let export = SkillExportRenderer.render(prompt(title: "Line1\rLine2"))
-        #expect(export.skillMarkdown.contains("description: \"Line1 Line2. Saved PromptBoard prompt, user-invoked only.\""))
+        let document = Frontmatter.parse(export.skillMarkdown)
+        #expect(document.fields["description"] == "\"\(expectedDescription("Line1 Line2"))\"")
     }
 
-    @Test func escapeCharacterInTitleIsStrippedFromOutput() throws {
-        let export = SkillExportRenderer.render(prompt(title: "Broken \u{1B}[31mRed\u{1B}[0m Text"))
-        let descriptionLine = try #require(export.skillMarkdown.split(separator: "\n").first { $0.hasPrefix("description: ") })
-        #expect(!descriptionLine.unicodeScalars.contains { CharacterSet.controlCharacters.contains($0) })
+    @Test func newlineInTitleIsFlattenedToSpace() {
+        let export = SkillExportRenderer.render(prompt(title: "Line1\nLine2"))
         let document = Frontmatter.parse(export.skillMarkdown)
-        #expect(document.fields["disable-model-invocation"] == "true")
+        #expect(document.fields["description"] == "\"\(expectedDescription("Line1 Line2"))\"")
+    }
+
+    @Test func crlfInTitleCollapsesToASingleSpace() {
+        let export = SkillExportRenderer.render(prompt(title: "Line1\r\nLine2"))
+        let document = Frontmatter.parse(export.skillMarkdown)
+        #expect(document.fields["description"] == "\"\(expectedDescription("Line1 Line2"))\"")
+    }
+
+    @Test func escapeCharacterInTitleIsReplacedWithSpace() {
+        let export = SkillExportRenderer.render(prompt(title: "Red\u{1B}[31mText"))
+        let document = Frontmatter.parse(export.skillMarkdown)
+        #expect(document.fields["description"] == "\"\(expectedDescription("Red [31mText"))\"")
+    }
+
+    @Test func emojiWithZeroWidthJoinersSurvivesIntact() {
+        let export = SkillExportRenderer.render(prompt(title: "Family 👨‍👩‍👧 Planner"))
+        let document = Frontmatter.parse(export.skillMarkdown)
+        #expect(document.fields["description"] == "\"\(expectedDescription("Family 👨‍👩‍👧 Planner"))\"")
     }
 }

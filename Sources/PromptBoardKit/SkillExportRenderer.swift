@@ -2,15 +2,12 @@ import Foundation
 
 // Renders a prompt as a minimal Agent Skill. Field rules come from what each tool
 // enforces: Codex errors on an empty description and caps name/description length,
-// OpenCode silently drops a skill with no name. `name` and `description` are always
-// double-quoted rather than quoted only when "risky" characters appear: YAML plain
-// scalars break on more than `:`/`#` (leading `[`, `"`, `!`, `>`, `-`, etc. are also
-// indicators, and bare `no`/`yes`/`123` parse as non-strings), so quoting
-// unconditionally is the only rule that removes the whole bug class instead of
-// chasing individual characters.
+// OpenCode silently drops a skill with no name, and YAML forbids raw control
+// characters even inside a quoted scalar.
 public enum SkillExportRenderer {
-    public static let nameLimit = 64
-    public static let descriptionLimit = 1024
+    private static let nameLimit = 64
+    private static let descriptionLimit = 1024
+    private static let descriptionSuffix = ". Saved PromptBoard prompt, user-invoked only."
 
     public struct Export: Equatable, Sendable {
         public let folderName: String
@@ -32,49 +29,66 @@ public enum SkillExportRenderer {
         return Export(folderName: folderName, skillMarkdown: markdown, openAIPolicy: openAIPolicy)
     }
 
-    static func cappedSlug(from title: String) -> String {
+    private static func cappedSlug(from title: String) -> String {
         // Slug.make never returns "" (falls back to "untitled"), never starts with
         // "-", and never emits consecutive "-" runs — so this prefix always starts
-        // alphanumeric, and stripping a trailing "-" can never empty it.
+        // alphanumeric, and at most one trailing "-" can ever appear here.
         let slug = Slug.make(from: title)
         guard slug.count > nameLimit else { return slug }
         var capped = String(slug.prefix(nameLimit))
-        while capped.hasSuffix("-") {
+        if capped.hasSuffix("-") {
             capped.removeLast()
         }
         return capped
     }
 
-    static func makeDescription(title: String) -> String {
+    private static func makeDescription(title: String) -> String {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let base = trimmed.isEmpty ? "Untitled" : trimmed
-        let flattened = base
-            .replacingOccurrences(of: "\r\n", with: " ")
-            .replacingOccurrences(of: "\r", with: " ")
-            .replacingOccurrences(of: "\n", with: " ")
-        // Control characters (NUL, ESC, DEL, ...) are illegal in YAML even inside a
-        // quoted scalar, so quoting alone doesn't make them safe.
-        let sanitized = stripControlCharacters(from: flattened)
-        return String("\(sanitized). Saved PromptBoard prompt, user-invoked only.".prefix(descriptionLimit))
+        let collapsed = collapsingNewlines(in: base)
+        let sanitized = replacingControlCharactersWithSpace(in: collapsed)
+        let truncated = String(sanitized.prefix(descriptionLimit - descriptionSuffix.count))
+        return truncated + descriptionSuffix
     }
 
-    static func stripControlCharacters(from value: String) -> String {
-        let space: Unicode.Scalar = " "
+    // CharacterSet.newlines also covers U+2028/U+2029, which some YAML parsers
+    // treat as line breaks even though Swift doesn't consider them \n or \r.
+    private static func collapsingNewlines(in value: String) -> String {
         var scalars = String.UnicodeScalarView()
+        var previousWasNewline = false
         for scalar in value.unicodeScalars {
-            scalars.append(CharacterSet.controlCharacters.contains(scalar) ? space : scalar)
+            if CharacterSet.newlines.contains(scalar) {
+                if !previousWasNewline {
+                    scalars.append(" ")
+                }
+                previousWasNewline = true
+            } else {
+                scalars.append(scalar)
+                previousWasNewline = false
+            }
         }
         return String(scalars)
     }
 
-    static func quotedScalar(_ value: String) -> String {
+    // Cc only — NOT CharacterSet.controlCharacters, which is Cc *and* Cf and would
+    // also strip Cf joiners like ZWJ (U+200D), breaking multi-codepoint emoji.
+    private static func replacingControlCharactersWithSpace(in value: String) -> String {
+        var scalars = String.UnicodeScalarView()
+        for scalar in value.unicodeScalars {
+            let isIllegalInYAML = scalar.value < 0x20 || (0x7F...0x9F).contains(scalar.value)
+            scalars.append(isIllegalInYAML ? " " : scalar)
+        }
+        return String(scalars)
+    }
+
+    private static func quotedScalar(_ value: String) -> String {
         let escaped = value
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")
         return "\"\(escaped)\""
     }
 
-    static let openAIPolicy = """
+    private static let openAIPolicy = """
     policy:
       allow_implicit_invocation: false
     """
