@@ -2,7 +2,12 @@ import Foundation
 
 // Renders a prompt as a minimal Agent Skill. Field rules come from what each tool
 // enforces: Codex errors on an empty description and caps name/description length,
-// OpenCode silently drops a skill with no name, and an unquoted colon breaks YAML.
+// OpenCode silently drops a skill with no name. `name` and `description` are always
+// double-quoted rather than quoted only when "risky" characters appear: YAML plain
+// scalars break on more than `:`/`#` (leading `[`, `"`, `!`, `>`, `-`, etc. are also
+// indicators, and bare `no`/`yes`/`123` parse as non-strings), so quoting
+// unconditionally is the only rule that removes the whole bug class instead of
+// chasing individual characters.
 public enum SkillExportRenderer {
     public static let nameLimit = 64
     public static let descriptionLimit = 1024
@@ -18,8 +23,8 @@ public enum SkillExportRenderer {
         let description = makeDescription(title: prompt.title)
         let markdown = Frontmatter.render(
             fields: [
-                ("name", folderName),
-                ("description", yamlScalar(description)),
+                ("name", quotedScalar(folderName)),
+                ("description", quotedScalar(description)),
                 ("disable-model-invocation", "true"),
             ],
             body: prompt.content
@@ -28,25 +33,29 @@ public enum SkillExportRenderer {
     }
 
     static func cappedSlug(from title: String) -> String {
+        // Slug.make never returns "" (falls back to "untitled"), never starts with
+        // "-", and never emits consecutive "-" runs — so this prefix always starts
+        // alphanumeric, and stripping a trailing "-" can never empty it.
         let slug = Slug.make(from: title)
         guard slug.count > nameLimit else { return slug }
         var capped = String(slug.prefix(nameLimit))
         while capped.hasSuffix("-") {
             capped.removeLast()
         }
-        return capped.isEmpty ? "untitled" : capped
+        return capped
     }
 
     static func makeDescription(title: String) -> String {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let base = trimmed.isEmpty ? "Untitled" : trimmed
-        let flattened = base.replacingOccurrences(of: "\n", with: " ")
+        let flattened = base
+            .replacingOccurrences(of: "\r\n", with: " ")
+            .replacingOccurrences(of: "\r", with: " ")
+            .replacingOccurrences(of: "\n", with: " ")
         return String("\(flattened). Saved PromptBoard prompt, user-invoked only.".prefix(descriptionLimit))
     }
 
-    static func yamlScalar(_ value: String) -> String {
-        let needsQuoting = value.contains(":") || value.contains("#") || value.hasPrefix(" ")
-        guard needsQuoting else { return value }
+    static func quotedScalar(_ value: String) -> String {
         let escaped = value
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")
