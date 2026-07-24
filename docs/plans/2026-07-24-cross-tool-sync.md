@@ -636,6 +636,21 @@ struct SyncReconcileTests {
         }
     }
 
+    // Pins the property that makes it safe to leave Frontmatter.parse non-unquoting:
+    // exports are written with quoted YAML scalars, so if load() ever scanned them
+    // the quotes would surface in the UI. Export/ sits outside Library/ precisely
+    // so that cannot happen.
+    @Test func exportedSkillsAreNotPickedUpAsLibraryItems() throws {
+        let (repository, _) = makeRepository()
+        _ = try repository.addPrompt(title: "Code Review", content: "Review it.")
+
+        _ = try repository.reconcileSync()
+
+        let items = try repository.load().items
+        #expect(items.count == 1)
+        #expect(items.allSatisfy { if case .prompt = $0 { true } else { false } })
+    }
+
     @Test func codexPolicyFileIsWrittenAlongsideTheSkill() throws {
         let (repository, _) = makeRepository()
         _ = try repository.addPrompt(title: "Code Review", content: "Review it.")
@@ -809,7 +824,7 @@ Note the asymmetry: skills are enumerated from disk (folder names are what the t
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `swift test --filter SyncReconcileTests`
-Expected: PASS, 6 tests.
+Expected: PASS, 7 tests.
 
 - [ ] **Step 5: Call reconcile after every mutation**
 
