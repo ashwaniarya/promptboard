@@ -18,6 +18,8 @@ public struct LibraryRepository: Sendable {
     public let directoryURL: URL
     public let syncTargets: SyncTargets
 
+    // Transitional: keeps single-directory symlink call sites compiling until Part B
+    // of the cross-tool-sync layer switches them to syncTargets.all.
     public var claudeSkillsURL: URL { syncTargets.claudeSkillsURL }
 
     public var libraryURL: URL { directoryURL.appendingPathComponent("Library", isDirectory: true) }

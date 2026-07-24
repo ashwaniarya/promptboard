@@ -8,11 +8,14 @@ struct SkillAuthoringTests {
             .appendingPathComponent("PromptBoardAuthoringTests-\(UUID().uuidString)", isDirectory: true)
     }
 
+    private func targets(claude: URL) -> SyncTargets {
+        SyncTargets(claudeSkillsURL: claude, agentsSkillsURL: temporaryDirectory())
+    }
+
     func makeRepository() -> (LibraryRepository, directory: URL, claude: URL) {
         let directory = temporaryDirectory()
         let claude = temporaryDirectory()
-        let syncTargets = SyncTargets(claudeSkillsURL: claude, agentsSkillsURL: temporaryDirectory())
-        return (LibraryRepository(directoryURL: directory, syncTargets: syncTargets), directory, claude)
+        return (LibraryRepository(directoryURL: directory, syncTargets: targets(claude: claude)), directory, claude)
     }
 
     @Test func createSkillWritesPureFrontmatterSidecarAndLink() throws {

@@ -19,15 +19,24 @@ public struct SyncTargets: Sendable, Equatable {
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> SyncTargets {
         let home = FileManager.default.homeDirectoryForCurrentUser
-        // A blank/whitespace-only or relative override resolves against the process's
-        // working directory instead of a real skills folder, so it's treated as unset
-        // rather than honoured — these paths are used to write symlinks into.
+        // A blank/whitespace-only override, or one still relative after ~ expansion,
+        // resolves against the process's working directory instead of a real skills
+        // folder, so it's treated as unset rather than honoured — these paths are used
+        // to write symlinks into. Silently falling back to the user's *real* tool
+        // directory would be worse than either: we warn so the miss is noticed.
         func directory(_ key: String, fallback: String) -> URL {
-            let override = environment[key]?.trimmingCharacters(in: .whitespaces) ?? ""
-            if !override.isEmpty, override.hasPrefix("/") {
-                return URL(fileURLWithPath: override, isDirectory: true)
+            let trimmed = environment[key]?.trimmingCharacters(in: .whitespaces) ?? ""
+            guard !trimmed.isEmpty else {
+                return home.appendingPathComponent(fallback, isDirectory: true)
             }
-            return home.appendingPathComponent(fallback, isDirectory: true)
+            let expanded = (trimmed as NSString).expandingTildeInPath
+            guard expanded.hasPrefix("/") else {
+                FileHandle.standardError.write(Data(
+                    "PromptBoard: \(key)=\"\(trimmed)\" is not an absolute path, ignoring override\n".utf8
+                ))
+                return home.appendingPathComponent(fallback, isDirectory: true)
+            }
+            return URL(fileURLWithPath: expanded, isDirectory: true)
         }
         return SyncTargets(
             claudeSkillsURL: directory("PROMPTBOARD_CLAUDE_SKILLS_DIR", fallback: ".claude/skills"),

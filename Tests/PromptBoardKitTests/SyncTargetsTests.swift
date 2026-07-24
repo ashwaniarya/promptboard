@@ -83,4 +83,25 @@ struct SyncTargetsTests {
         #expect(targets.claudeSkillsURL.path == "/tmp/c")
         #expect(targets.agentsSkillsURL.path == "/tmp/a")
     }
+
+    @Test func tildeOverrideExpandsUnderTheHomeDirectoryAndIsHonoured() {
+        let targets = SyncTargets.systemDefault(environment: [
+            "PROMPTBOARD_CLAUDE_SKILLS_DIR": "~/tmp/iso",
+            "PROMPTBOARD_AGENTS_SKILLS_DIR": "/tmp/a",
+        ])
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        #expect(targets.claudeSkillsURL.path == home.appendingPathComponent("tmp/iso").path)
+    }
+
+    // Not every leading ~ resolves: an unknown user leaves the path untouched, so it's
+    // still relative after expansion and must fall back the same as a plain relative
+    // path — the warning this logs is enough; we don't assert on stderr here.
+    @Test func overrideStillRelativeAfterTildeExpansionFallsBack() {
+        let targets = SyncTargets.systemDefault(environment: [
+            "PROMPTBOARD_CLAUDE_SKILLS_DIR": "~doesnotexist12345/skills",
+            "PROMPTBOARD_AGENTS_SKILLS_DIR": "/tmp/a",
+        ])
+        #expect(targets.claudeSkillsURL.path.hasSuffix("/.claude/skills"))
+        #expect(targets.agentsSkillsURL.path == "/tmp/a")
+    }
 }

@@ -8,7 +8,9 @@ struct SkillRepositoryTests {
             .appendingPathComponent("PromptBoardSkillTests-\(UUID().uuidString)", isDirectory: true)
     }
 
-    private func isolatedTargets() -> SyncTargets { .temporary() }
+    private func targets(claude: URL) -> SyncTargets {
+        SyncTargets(claudeSkillsURL: claude, agentsSkillsURL: temporaryDirectory())
+    }
 
     private func makeSourceSkill(
         name: String,
@@ -39,7 +41,7 @@ struct SkillRepositoryTests {
         )
         let repository = LibraryRepository(
             directoryURL: directory,
-            syncTargets: SyncTargets(claudeSkillsURL: claudeSkills, agentsSkillsURL: temporaryDirectory())
+            syncTargets: targets(claude: claudeSkills)
         )
 
         let skill = try repository.importSkill(fromDirectory: source, group: "Tools")
@@ -72,7 +74,7 @@ struct SkillRepositoryTests {
         let source = try makeSourceSkill(name: "demo-skill", description: "clashes")
         let repository = LibraryRepository(
             directoryURL: directory,
-            syncTargets: SyncTargets(claudeSkillsURL: claudeSkills, agentsSkillsURL: temporaryDirectory())
+            syncTargets: targets(claude: claudeSkills)
         )
 
         let skill = try repository.importSkill(fromDirectory: source, group: nil)
@@ -88,14 +90,15 @@ struct SkillRepositoryTests {
         let source = try makeSourceSkill(name: "demo-skill", description: "d")
         let repository = LibraryRepository(
             directoryURL: directory,
-            syncTargets: SyncTargets(claudeSkillsURL: claudeSkills, agentsSkillsURL: temporaryDirectory())
+            syncTargets: targets(claude: claudeSkills)
         )
         let skill = try repository.importSkill(fromDirectory: source, group: nil)
 
         _ = try repository.deleteSkill(id: skill.id)
 
         #expect(!FileManager.default.fileExists(atPath: directory.appendingPathComponent("Library/skills/demo-skill").path))
-        #expect(!FileManager.default.fileExists(atPath: claudeSkills.appendingPathComponent("demo-skill").path))
+        #expect((try? FileManager.default.destinationOfSymbolicLink(
+            atPath: claudeSkills.appendingPathComponent("demo-skill").path)) == nil)
         #expect(try repository.load().items.isEmpty)
     }
 
@@ -105,7 +108,7 @@ struct SkillRepositoryTests {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         try Data("---\nname: manual\ndescription: Hand dropped\n---\n# Body".utf8)
             .write(to: folder.appendingPathComponent("SKILL.md"))
-        let repository = LibraryRepository(directoryURL: directory, syncTargets: isolatedTargets())
+        let repository = LibraryRepository(directoryURL: directory, syncTargets: .temporary())
 
         let first = try repository.load().items
         let second = try repository.load().items
@@ -122,7 +125,7 @@ struct SkillRepositoryTests {
         let source = try makeSourceSkill(name: "demo-skill", description: "d")
         let repository = LibraryRepository(
             directoryURL: directory,
-            syncTargets: SyncTargets(claudeSkillsURL: claudeSkills, agentsSkillsURL: temporaryDirectory())
+            syncTargets: targets(claude: claudeSkills)
         )
         let skill = try repository.importSkill(fromDirectory: source, group: nil)
         #expect(skill.group == nil)
