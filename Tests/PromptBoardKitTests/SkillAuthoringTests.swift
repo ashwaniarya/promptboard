@@ -11,7 +11,8 @@ struct SkillAuthoringTests {
     func makeRepository() -> (LibraryRepository, directory: URL, claude: URL) {
         let directory = temporaryDirectory()
         let claude = temporaryDirectory()
-        return (LibraryRepository(directoryURL: directory, claudeSkillsURL: claude), directory, claude)
+        let syncTargets = SyncTargets(claudeSkillsURL: claude, agentsSkillsURL: temporaryDirectory())
+        return (LibraryRepository(directoryURL: directory, syncTargets: syncTargets), directory, claude)
     }
 
     @Test func createSkillWritesPureFrontmatterSidecarAndLink() throws {

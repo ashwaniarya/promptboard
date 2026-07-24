@@ -16,7 +16,9 @@ public enum LibraryRepositoryError: Error, Sendable {
 // Non-reentrant: never call the self-locking conveniences from inside `body`.
 public struct LibraryRepository: Sendable {
     public let directoryURL: URL
-    public let claudeSkillsURL: URL
+    public let syncTargets: SyncTargets
+
+    public var claudeSkillsURL: URL { syncTargets.claudeSkillsURL }
 
     public var libraryURL: URL { directoryURL.appendingPathComponent("Library", isDirectory: true) }
     public var promptsDirectoryURL: URL { libraryURL.appendingPathComponent("prompts", isDirectory: true) }
@@ -29,14 +31,9 @@ public struct LibraryRepository: Sendable {
             .appendingPathComponent("PromptBoard", isDirectory: true)
     }
 
-    public static var defaultClaudeSkillsURL: URL {
-        FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".claude/skills", isDirectory: true)
-    }
-
-    public init(directoryURL: URL, claudeSkillsURL: URL = LibraryRepository.defaultClaudeSkillsURL) {
+    public init(directoryURL: URL, syncTargets: SyncTargets) {
         self.directoryURL = directoryURL
-        self.claudeSkillsURL = claudeSkillsURL
+        self.syncTargets = syncTargets
     }
 
     // MARK: - Loading

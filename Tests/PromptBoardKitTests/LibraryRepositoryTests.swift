@@ -8,13 +8,15 @@ struct LibraryRepositoryTests {
             .appendingPathComponent("PromptBoardLibraryTests-\(UUID().uuidString)", isDirectory: true)
     }
 
+    private func isolatedTargets() -> SyncTargets { .temporary() }
+
     private func promptsDir(_ base: URL) -> URL {
         base.appendingPathComponent("Library/prompts", isDirectory: true)
     }
 
     @Test func loadOnEmptyReturnsNothingAndCreatesNothing() throws {
         let directory = temporaryDirectory()
-        let repository = LibraryRepository(directoryURL: directory)
+        let repository = LibraryRepository(directoryURL: directory, syncTargets: isolatedTargets())
 
         let load = try repository.load()
 
@@ -24,7 +26,7 @@ struct LibraryRepositoryTests {
 
     @Test func addPromptWritesReadableMarkdownAndLoadsBack() throws {
         let directory = temporaryDirectory()
-        let repository = LibraryRepository(directoryURL: directory)
+        let repository = LibraryRepository(directoryURL: directory, syncTargets: isolatedTargets())
 
         let prompt = try repository.addPrompt(title: "Code Review", content: "Review the diff", group: "Coding")
 
@@ -43,7 +45,7 @@ struct LibraryRepositoryTests {
 
     @Test func slugCollisionsGetDistinctFiles() throws {
         let directory = temporaryDirectory()
-        let repository = LibraryRepository(directoryURL: directory)
+        let repository = LibraryRepository(directoryURL: directory, syncTargets: isolatedTargets())
 
         _ = try repository.addPrompt(title: "Dup", content: "a")
         _ = try repository.addPrompt(title: "Dup", content: "b")
@@ -57,7 +59,7 @@ struct LibraryRepositoryTests {
 
     @Test func partialUpdatePreservesOmittedFields() throws {
         let directory = temporaryDirectory()
-        let repository = LibraryRepository(directoryURL: directory)
+        let repository = LibraryRepository(directoryURL: directory, syncTargets: isolatedTargets())
         let added = try repository.addPrompt(title: "Original", content: "original body")
 
         let renamed = try repository.updatePrompt(id: added.id, title: "Renamed", content: nil)
@@ -70,7 +72,7 @@ struct LibraryRepositoryTests {
 
     @Test func deleteRemovesTheFile() throws {
         let directory = temporaryDirectory()
-        let repository = LibraryRepository(directoryURL: directory)
+        let repository = LibraryRepository(directoryURL: directory, syncTargets: isolatedTargets())
         let added = try repository.addPrompt(title: "Bye", content: "x")
 
         _ = try repository.deletePrompt(id: added.id)
@@ -81,7 +83,7 @@ struct LibraryRepositoryTests {
 
     @Test func unknownIdThrowsPromptNotFound() throws {
         let directory = temporaryDirectory()
-        let repository = LibraryRepository(directoryURL: directory)
+        let repository = LibraryRepository(directoryURL: directory, syncTargets: isolatedTargets())
         let ghost = UUID()
 
         do {
@@ -94,7 +96,7 @@ struct LibraryRepositoryTests {
 
     @Test func malformedFileIsSkippedNotFatal() throws {
         let directory = temporaryDirectory()
-        let repository = LibraryRepository(directoryURL: directory)
+        let repository = LibraryRepository(directoryURL: directory, syncTargets: isolatedTargets())
         _ = try repository.addPrompt(title: "Good", content: "ok")
         let badURL = promptsDir(directory).appendingPathComponent("bad.md")
         try Data("---\ntitle: no id here\n---\nbody".utf8).write(to: badURL)
@@ -107,7 +109,7 @@ struct LibraryRepositoryTests {
 
     @Test func concurrentAddsLoseNoWrites() throws {
         let directory = temporaryDirectory()
-        let repository = LibraryRepository(directoryURL: directory)
+        let repository = LibraryRepository(directoryURL: directory, syncTargets: isolatedTargets())
 
         DispatchQueue.concurrentPerform(iterations: 20) { index in
             _ = try? repository.addPrompt(title: "Prompt \(index)", content: "content \(index)")
@@ -125,7 +127,7 @@ struct LibraryRepositoryTests {
         ]
         try CanonicalJSON.makeEncoder().encode(legacy)
             .write(to: directory.appendingPathComponent("prompts.json"))
-        let repository = LibraryRepository(directoryURL: directory)
+        let repository = LibraryRepository(directoryURL: directory, syncTargets: isolatedTargets())
 
         #expect(try repository.migrateLegacyIfNeeded() == true)
 

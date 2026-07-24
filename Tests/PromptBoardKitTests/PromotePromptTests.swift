@@ -8,10 +8,15 @@ struct PromotePromptTests {
             .appendingPathComponent("PromptBoardPromoteTests-\(UUID().uuidString)", isDirectory: true)
     }
 
+    func isolatedTargets() -> SyncTargets { .temporary() }
+
     @Test func promoteCreatesSkillFromContentAndRemovesPrompt() throws {
         let directory = temporaryDirectory()
         let claude = temporaryDirectory()
-        let repository = LibraryRepository(directoryURL: directory, claudeSkillsURL: claude)
+        let repository = LibraryRepository(
+            directoryURL: directory,
+            syncTargets: SyncTargets(claudeSkillsURL: claude, agentsSkillsURL: temporaryDirectory())
+        )
         let prompt = try repository.addPrompt(title: "Big One", content: "# Huge\nlots of steps", group: "Coding")
 
         let skill = try repository.promotePromptToSkill(
@@ -29,7 +34,10 @@ struct PromotePromptTests {
     @Test func promoteKeepsOriginalPromptWhenRequested() throws {
         let directory = temporaryDirectory()
         let claude = temporaryDirectory()
-        let repository = LibraryRepository(directoryURL: directory, claudeSkillsURL: claude)
+        let repository = LibraryRepository(
+            directoryURL: directory,
+            syncTargets: SyncTargets(claudeSkillsURL: claude, agentsSkillsURL: temporaryDirectory())
+        )
         let prompt = try repository.addPrompt(title: "Keeper", content: "stays", group: nil)
 
         _ = try repository.promotePromptToSkill(
@@ -43,7 +51,7 @@ struct PromotePromptTests {
 
     @Test func promoteThrowsForMissingPrompt() throws {
         let directory = temporaryDirectory()
-        let repository = LibraryRepository(directoryURL: directory, claudeSkillsURL: temporaryDirectory())
+        let repository = LibraryRepository(directoryURL: directory, syncTargets: isolatedTargets())
         #expect(throws: LibraryRepositoryError.self) {
             try repository.promotePromptToSkill(promptID: UUID(), name: "x", description: "y", group: nil, removingPrompt: true)
         }

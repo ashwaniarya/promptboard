@@ -9,13 +9,15 @@ struct LibraryStoreTests {
             .appendingPathComponent("PromptBoardStoreTests-\(UUID().uuidString)", isDirectory: true)
     }
 
+    private func isolatedTargets() -> SyncTargets { .temporary() }
+
     private func promptTitles(_ store: LibraryStore) -> [String] {
         store.items.compactMap { if case .prompt(let prompt) = $0 { prompt.title } else { nil } }
     }
 
     @Test func firstRunSeedsSamplePromptsIntoTheFolderLibrary() {
         let directory = temporaryDirectory()
-        let store = LibraryStore(directoryURL: directory)
+        let store = LibraryStore(directoryURL: directory, syncTargets: isolatedTargets())
 
         #expect(store.items.count == SeedPrompts.samples.count)
         #expect(FileManager.default.fileExists(atPath: directory.appendingPathComponent("Library/prompts").path))
@@ -23,10 +25,10 @@ struct LibraryStoreTests {
 
     @Test func addedPromptRoundTripsAcrossStoreInstances() {
         let directory = temporaryDirectory()
-        let first = LibraryStore(directoryURL: directory)
+        let first = LibraryStore(directoryURL: directory, syncTargets: isolatedTargets())
         let added = first.add(title: "Test Title", content: "unicode: café ✓")
 
-        let second = LibraryStore(directoryURL: directory)
+        let second = LibraryStore(directoryURL: directory, syncTargets: isolatedTargets())
         let reloaded = second.items.first { $0.id == added.id }
 
         #expect(reloaded != nil)
@@ -35,38 +37,38 @@ struct LibraryStoreTests {
 
     @Test func updatePersistsAcrossInstancesAndBumpsUpdatedAt() throws {
         let directory = temporaryDirectory()
-        let store = LibraryStore(directoryURL: directory)
+        let store = LibraryStore(directoryURL: directory, syncTargets: isolatedTargets())
         let original = store.add(title: "Before", content: "old")
 
         store.update(id: original.id, title: "After", content: "new")
 
-        let reloaded = try #require(LibraryStore(directoryURL: directory).items.first { $0.id == original.id })
+        let reloaded = try #require(LibraryStore(directoryURL: directory, syncTargets: isolatedTargets()).items.first { $0.id == original.id })
         #expect(reloaded.title == "After")
         #expect(reloaded.updatedAt >= original.updatedAt)
     }
 
     @Test func datesRoundTripWithSubSecondPrecision() throws {
         let directory = temporaryDirectory()
-        let store = LibraryStore(directoryURL: directory)
+        let store = LibraryStore(directoryURL: directory, syncTargets: isolatedTargets())
         let added = store.add(title: "Precise", content: "x")
 
-        let reloaded = try #require(LibraryStore(directoryURL: directory).items.first { $0.id == added.id })
+        let reloaded = try #require(LibraryStore(directoryURL: directory, syncTargets: isolatedTargets()).items.first { $0.id == added.id })
         #expect(abs(reloaded.updatedAt.timeIntervalSince(added.updatedAt)) < 0.005)
     }
 
     @Test func deleteRemovesPromptPersistently() {
         let directory = temporaryDirectory()
-        let store = LibraryStore(directoryURL: directory)
+        let store = LibraryStore(directoryURL: directory, syncTargets: isolatedTargets())
         let added = store.add(title: "Doomed", content: "gone soon")
 
         store.delete(id: added.id)
 
-        #expect(!LibraryStore(directoryURL: directory).items.contains { $0.id == added.id })
+        #expect(!LibraryStore(directoryURL: directory, syncTargets: isolatedTargets()).items.contains { $0.id == added.id })
     }
 
     @Test func emptyTitleDefaultsToUntitled() {
         let directory = temporaryDirectory()
-        let store = LibraryStore(directoryURL: directory)
+        let store = LibraryStore(directoryURL: directory, syncTargets: isolatedTargets())
         let added = store.add(title: "   \n", content: "body")
         #expect(added.title == "Untitled")
     }
@@ -78,7 +80,7 @@ struct LibraryStoreTests {
         try CanonicalJSON.makeEncoder().encode(legacy)
             .write(to: directory.appendingPathComponent("prompts.json"))
 
-        let store = LibraryStore(directoryURL: directory)
+        let store = LibraryStore(directoryURL: directory, syncTargets: isolatedTargets())
 
         #expect(Set(promptTitles(store)) == ["Legacy One", "Legacy Two"])
         // legacy content is migrated, not re-seeded with samples
@@ -87,8 +89,8 @@ struct LibraryStoreTests {
 
     @Test func reloadAppliesExternalPromptWrite() throws {
         let directory = temporaryDirectory()
-        let store = LibraryStore(directoryURL: directory)
-        let external = try LibraryRepository(directoryURL: directory).addPrompt(title: "External", content: "from agent")
+        let store = LibraryStore(directoryURL: directory, syncTargets: isolatedTargets())
+        let external = try LibraryRepository(directoryURL: directory, syncTargets: isolatedTargets()).addPrompt(title: "External", content: "from agent")
 
         store.reloadFromDiskIfChanged()
 
@@ -97,7 +99,7 @@ struct LibraryStoreTests {
 
     @Test func ownWriteDoesNotTriggerAReloadChange() throws {
         let directory = temporaryDirectory()
-        let store = LibraryStore(directoryURL: directory)
+        let store = LibraryStore(directoryURL: directory, syncTargets: isolatedTargets())
         let added = store.add(title: "Mine", content: "self write")
         let countAfterAdd = store.items.count
 
@@ -109,7 +111,7 @@ struct LibraryStoreTests {
 
     @Test func externalSkillFolderAppearsOnReload() throws {
         let directory = temporaryDirectory()
-        let store = LibraryStore(directoryURL: directory)
+        let store = LibraryStore(directoryURL: directory, syncTargets: isolatedTargets())
         let skillFolder = directory.appendingPathComponent("Library/skills/dropped")
         try FileManager.default.createDirectory(at: skillFolder, withIntermediateDirectories: true)
         try Data("---\nname: dropped\ndescription: A dropped skill\n---\n# Body".utf8)
@@ -122,10 +124,10 @@ struct LibraryStoreTests {
 
     @Test func watcherAppliesExternalChangeAutomatically() async throws {
         let directory = temporaryDirectory()
-        let store = LibraryStore(directoryURL: directory)
+        let store = LibraryStore(directoryURL: directory, syncTargets: isolatedTargets())
         store.startWatchingForExternalChanges()
 
-        let external = try LibraryRepository(directoryURL: directory).addPrompt(title: "Watched", content: "x")
+        let external = try LibraryRepository(directoryURL: directory, syncTargets: isolatedTargets()).addPrompt(title: "Watched", content: "x")
 
         for _ in 0..<40 where !store.items.contains(where: { $0.id == external.id }) {
             try await Task.sleep(for: .milliseconds(50))
@@ -135,7 +137,7 @@ struct LibraryStoreTests {
 
     @Test func malformedItemDoesNotBreakTheStore() throws {
         let directory = temporaryDirectory()
-        let store = LibraryStore(directoryURL: directory)
+        let store = LibraryStore(directoryURL: directory, syncTargets: isolatedTargets())
         let good = store.add(title: "Good", content: "ok")
         try Data("---\ntitle: no id\n---\nbody".utf8)
             .write(to: directory.appendingPathComponent("Library/prompts/broken.md"))
@@ -148,18 +150,24 @@ struct LibraryStoreTests {
     @Test func createSkillAppearsInItemsAndPersists() {
         let directory = temporaryDirectory()
         let claude = temporaryDirectory()
-        let store = LibraryStore(directoryURL: directory, claudeSkillsURL: claude)
+        let store = LibraryStore(
+            directoryURL: directory,
+            syncTargets: SyncTargets(claudeSkillsURL: claude, agentsSkillsURL: temporaryDirectory())
+        )
 
         let skill = store.createSkill(name: "Runbook", description: "deploy steps", group: "Ops", body: "# Go")
 
         #expect(skill != nil)
         #expect(store.items.contains { $0.kind == .skill && $0.title == "runbook" })
-        #expect(LibraryStore(directoryURL: directory, claudeSkillsURL: claude).items.contains { $0.title == "runbook" })
+        #expect(LibraryStore(
+            directoryURL: directory,
+            syncTargets: SyncTargets(claudeSkillsURL: claude, agentsSkillsURL: temporaryDirectory())
+        ).items.contains { $0.title == "runbook" })
     }
 
     @Test func updateSkillRenameReplacesTheCardKeepingID() {
         let directory = temporaryDirectory()
-        let store = LibraryStore(directoryURL: directory, claudeSkillsURL: temporaryDirectory())
+        let store = LibraryStore(directoryURL: directory, syncTargets: isolatedTargets())
         let skill = store.createSkill(name: "before", description: "d", group: nil, body: "")!
 
         let renamed = store.updateSkill(id: skill.id, name: "after", description: "d", group: nil, body: "")
@@ -172,7 +180,7 @@ struct LibraryStoreTests {
 
     @Test func skillFileWriteAndDeleteRoundTripThroughStore() {
         let directory = temporaryDirectory()
-        let store = LibraryStore(directoryURL: directory, claudeSkillsURL: temporaryDirectory())
+        let store = LibraryStore(directoryURL: directory, syncTargets: isolatedTargets())
         let skill = store.createSkill(name: "docs", description: "d", group: nil, body: "")!
 
         _ = store.writeSkillFile(id: skill.id, relativePath: "ref.md", data: Data("hi".utf8))
@@ -185,7 +193,7 @@ struct LibraryStoreTests {
 
     @Test func promoteThroughStoreRemovesPromptAndAddsSkill() {
         let directory = temporaryDirectory()
-        let store = LibraryStore(directoryURL: directory, claudeSkillsURL: temporaryDirectory())
+        let store = LibraryStore(directoryURL: directory, syncTargets: isolatedTargets())
         let prompt = store.add(title: "Convert Me", content: "# body")
 
         let skill = store.promotePromptToSkill(
@@ -199,7 +207,7 @@ struct LibraryStoreTests {
 
     @Test func skillFileTextIsNilForNonUTF8Content() {
         let directory = temporaryDirectory()
-        let store = LibraryStore(directoryURL: directory, claudeSkillsURL: temporaryDirectory())
+        let store = LibraryStore(directoryURL: directory, syncTargets: isolatedTargets())
         let skill = store.createSkill(name: "bin", description: "d", group: nil, body: "")!
 
         _ = store.writeSkillFile(id: skill.id, relativePath: "notes.md", data: Data("hello".utf8))

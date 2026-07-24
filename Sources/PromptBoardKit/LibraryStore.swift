@@ -32,8 +32,8 @@ public final class LibraryStore {
         return ordered.sorted()
     }
 
-    public init(directoryURL: URL, claudeSkillsURL: URL = LibraryRepository.defaultClaudeSkillsURL) {
-        repository = LibraryRepository(directoryURL: directoryURL, claudeSkillsURL: claudeSkillsURL)
+    public init(directoryURL: URL, syncTargets: SyncTargets) {
+        repository = LibraryRepository(directoryURL: directoryURL, syncTargets: syncTargets)
         loadInitial()
     }
 

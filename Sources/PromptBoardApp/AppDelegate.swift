@@ -17,10 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let dataDirectoryURL = ProcessInfo.processInfo.environment["PROMPTBOARD_DATA_DIR"]
             .map { URL(fileURLWithPath: $0, isDirectory: true) }
             ?? LibraryStore.defaultDirectoryURL
-        let claudeSkillsURL = ProcessInfo.processInfo.environment["PROMPTBOARD_CLAUDE_SKILLS_DIR"]
-            .map { URL(fileURLWithPath: $0, isDirectory: true) }
-            ?? LibraryRepository.defaultClaudeSkillsURL
-        libraryStore = LibraryStore(directoryURL: dataDirectoryURL, claudeSkillsURL: claudeSkillsURL)
+        libraryStore = LibraryStore(directoryURL: dataDirectoryURL, syncTargets: .systemDefault())
         libraryStore.startWatchingForExternalChanges()
         appState = AppState(store: libraryStore)
         overlayController = OverlayController(appState: appState)
