@@ -34,6 +34,10 @@ struct OverlayRootView: View {
             if let convertingPrompt = appState.convertingPrompt {
                 convertLayer(convertingPrompt)
             }
+
+            if let adoptingItem = appState.adoptingItem {
+                adoptLayer(adoptingItem)
+            }
         }
         .ignoresSafeArea()
         .defaultFocus($searchFieldFocused, true)
@@ -144,6 +148,22 @@ struct OverlayRootView: View {
 
             ConvertPromptSheet(prompt: prompt, appState: appState)
                 .id(prompt.id)
+        }
+        .transition(.opacity)
+    }
+
+    private func adoptLayer(_ item: ExternalItem) -> some View {
+        ZStack {
+            Color.black.opacity(0.4)
+                .contentShape(Rectangle())
+                .onTapGesture { appState.adoptingItem = nil }
+
+            AdoptExternalSheet(
+                item: item,
+                onAdopt: { appState.confirmAdopt(mode: $0) },
+                onCancel: { appState.adoptingItem = nil }
+            )
+            .id(item.id)
         }
         .transition(.opacity)
     }
