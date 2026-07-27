@@ -79,8 +79,11 @@ extension LibraryRepository {
     private func backUpAndReplaceWithLink(original: URL, target: URL) throws {
         let stamp = ISO8601DateFormatter().string(from: Date())
             .replacingOccurrences(of: ":", with: "-")
+        // Leading dot: the backup sits inside a tool's skills dir, so without it every
+        // tool (and our own scanner) would load the backup as a stale duplicate skill.
+        // A dotfile is skipped by all of them yet stays recoverable.
         let backup = original.deletingLastPathComponent()
-            .appendingPathComponent("\(original.lastPathComponent).promptboard-backup-\(stamp)")
+            .appendingPathComponent(".\(original.lastPathComponent).promptboard-backup-\(stamp)")
         try FileManager.default.moveItem(at: original, to: backup)
         try FileManager.default.createSymbolicLink(at: original, withDestinationURL: target)
     }

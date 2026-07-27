@@ -43,7 +43,23 @@ struct AdoptExternalTests {
         let siblings = try FileManager.default.contentsOfDirectory(
             atPath: item.url.deletingLastPathComponent().path
         )
-        #expect(siblings.contains { $0.hasPrefix("trello-card-reader.promptboard-backup-") })
+        #expect(siblings.contains { $0.hasPrefix(".trello-card-reader.promptboard-backup-") })
+    }
+
+    @Test func aMoveBackupIsNotReSurfacedAsAnAdoptableExternalItem() throws {
+        let repository = makeRepository()
+        let item = try makeExternalSkill(named: "trello-card-reader")
+        let scanRoot = item.url.deletingLastPathComponent()
+
+        try repository.adoptExternal(item, mode: .move)
+
+        // The scanner must not offer the just-created backup as a new external item,
+        // and no tool should load it: the backup is a dotfile.
+        let external = ExternalLibraryScanner.scan(
+            roots: [.init(url: scanRoot, origin: "Claude Code", kind: .skill)],
+            storageRoot: repository.directoryURL
+        )
+        #expect(external.isEmpty)
     }
 
     @Test func adoptedSkillBecomesALibraryItem() throws {
