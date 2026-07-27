@@ -55,14 +55,21 @@ enum SymlinkManager {
         }
     }
 
+    // The path a symlink resolves to (relative targets resolved against the link's
+    // own location), or nil when `url` is not a symlink. Lets reconcile tell its own
+    // stale links (repoint) from foreign entries (leave untouched, report conflict).
+    static func resolvedDestination(of url: URL) -> URL? {
+        guard let target = try? FileManager.default.destinationOfSymbolicLink(atPath: url.path) else {
+            return nil
+        }
+        return URL(fileURLWithPath: target, relativeTo: url).standardizedFileURL
+    }
+
     // Ownership is derived, not recorded: an entry is ours exactly when it is a
     // symlink resolving inside our own storage. That is what lets the external
     // scanner skip our writes without a manifest to keep in step.
     static func isOwned(_ url: URL, byStorageRoot root: URL) -> Bool {
-        guard let target = try? FileManager.default.destinationOfSymbolicLink(atPath: url.path) else {
-            return false
-        }
-        let resolved = URL(fileURLWithPath: target, relativeTo: url).standardizedFileURL
+        guard let resolved = resolvedDestination(of: url) else { return false }
         let rootPath = root.standardizedFileURL.path
         return resolved.path == rootPath || resolved.path.hasPrefix(rootPath + "/")
     }

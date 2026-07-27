@@ -8,6 +8,7 @@ import Observation
 @Observable
 public final class LibraryStore {
     public private(set) var items: [LibraryEntry] = []
+    public private(set) var syncConflicts: [LibraryRepository.SyncConflict] = []
 
     private let repository: LibraryRepository
     private var lastSignature = ""
@@ -186,6 +187,9 @@ public final class LibraryStore {
         guard signature != lastSignature else { return }
         items = load.items
         lastSignature = signature
+        // A prompt added by the CLI or MCP while the app runs reaches us only here;
+        // without this, it would not sync until the next in-app action.
+        reconcileSync()
     }
 
     private func scheduleReload() {
@@ -206,6 +210,7 @@ public final class LibraryStore {
             _ = try? repository.seedPromptsIfEmpty(SeedPrompts.samples)
         }
         refreshFromDisk()
+        reconcileSync()
     }
 
     // Reads the on-disk state back after our own writes so the resulting signature
@@ -214,6 +219,17 @@ public final class LibraryStore {
         let load = (try? repository.load()) ?? LibraryRepository.Load(items: [], skippedPaths: [])
         items = load.items
         lastSignature = Self.signature(of: load.items)
+        reconcileSync()
+    }
+
+    // Writes only to Export/ and the external target dirs (both outside Library/),
+    // so it never retriggers the prompts/skills watchers that drive reloadFromDiskIfChanged.
+    private func reconcileSync() {
+        do {
+            syncConflicts = try repository.reconcileSync()
+        } catch {
+            reportFailure(error)
+        }
     }
 
     private static func signature(of items: [LibraryEntry]) -> String {
