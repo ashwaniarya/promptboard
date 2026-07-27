@@ -119,6 +119,40 @@ struct SyncReconcileTests {
         }
     }
 
+    @Test func foreignSymlinkAtTheTargetPathIsReportedAndNeverRepointed() throws {
+        let (repository, targets) = makeRepository()
+        _ = try repository.addPrompt(title: "Code Review", content: "Review it.")
+        // A foreign symlink (resolves OUTSIDE our storage) exercises a different branch
+        // than a foreign directory: the repoint gate must reject it via isOwned.
+        let elsewhere = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent("foreign-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: elsewhere, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: targets.agentsSkillsURL, withIntermediateDirectories: true)
+        let foreignLink = targets.agentsSkillsURL.appendingPathComponent("code-review")
+        try FileManager.default.createSymbolicLink(at: foreignLink, withDestinationURL: elsewhere)
+
+        let conflicts = try repository.reconcileSync()
+
+        #expect(conflicts.contains { $0.name == "code-review" })
+        #expect(SymlinkManager.resolvedDestination(of: foreignLink)?.path == elsewhere.standardizedFileURL.path)
+    }
+
+    @Test func twoPromptsWithTheSameSlugAreReportedNotSilentlyCollapsed() throws {
+        let (repository, targets) = makeRepository()
+        _ = try repository.addPrompt(title: "Code Review", content: "First")
+        _ = try repository.addPrompt(title: "code review", content: "Second")
+
+        let conflicts = try repository.reconcileSync()
+
+        #expect(conflicts.contains { $0.name == "code-review" })
+        // Exactly one export/link survives (last-writer-wins is fine); the point is the
+        // collision surfaces as a conflict rather than vanishing.
+        let linked = targets.all.allSatisfy {
+            SymlinkManager.isOwned($0.appendingPathComponent("code-review"), byStorageRoot: repository.directoryURL)
+        }
+        #expect(linked)
+    }
+
     @Test func anAuthoredSkillWinsOverAPromptWithTheSameSlug() throws {
         let (repository, _) = makeRepository()
         _ = try repository.createSkill(name: "code-review", description: "Real skill", group: nil, body: "Body")

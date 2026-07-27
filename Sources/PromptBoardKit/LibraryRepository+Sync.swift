@@ -43,6 +43,17 @@ extension LibraryRepository {
                 ))
                 continue
             }
+            // Two prompts whose titles slugify to the same name would otherwise
+            // overwrite each other's export last-writer-wins, silently dropping one
+            // from every tool. Report it instead — auto-suffixing the slash-command
+            // name a user types is exactly what the design rejects.
+            guard !exportedNames.contains(export.folderName) else {
+                conflicts.append(SyncConflict(
+                    name: export.folderName,
+                    reason: "another prompt already uses this slash-command name — rename one"
+                ))
+                continue
+            }
             let folder = exportSkillsURL.appendingPathComponent(export.folderName, isDirectory: true)
             try ensureDirectory(folder.appendingPathComponent("agents", isDirectory: true))
             try Data(export.skillMarkdown.utf8)

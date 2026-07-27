@@ -210,7 +210,6 @@ public final class LibraryStore {
             _ = try? repository.seedPromptsIfEmpty(SeedPrompts.samples)
         }
         refreshFromDisk()
-        reconcileSync()
     }
 
     // Reads the on-disk state back after our own writes so the resulting signature
