@@ -67,7 +67,9 @@ final class AppState {
     }
 
     var externalItems: [ExternalItem] {
-        showExternalItems ? store.externalItems : []
+        // Respect the search box like library items do (by name + origin); external
+        // items are group-less so they stay exempt from the group selection.
+        showExternalItems ? PromptFilter.filter(store.externalItems, query: searchText) : []
     }
 
     var groupCounts: [(name: String, count: Int)] {
