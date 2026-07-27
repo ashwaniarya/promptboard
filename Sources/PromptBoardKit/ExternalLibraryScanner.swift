@@ -11,6 +11,15 @@ public struct ExternalItem: Identifiable, Sendable, Equatable {
     public let kind: Kind
     public let origin: String
     public let url: URL
+    public let description: String
+
+    public init(name: String, kind: Kind, origin: String, url: URL, description: String = "") {
+        self.name = name
+        self.kind = kind
+        self.origin = origin
+        self.url = url
+        self.description = description
+    }
 }
 
 // Read-only discovery of skills and commands that already live inside each tool.
@@ -66,7 +75,10 @@ public enum ExternalLibraryScanner {
                 case .skill:
                     let skillFile = entry.appendingPathComponent("SKILL.md")
                     guard FileManager.default.fileExists(atPath: skillFile.path) else { continue }
-                    items.append(ExternalItem(name: name, kind: .skill, origin: root.origin, url: entry))
+                    items.append(ExternalItem(
+                        name: name, kind: .skill, origin: root.origin, url: entry,
+                        description: descriptionFromFrontmatter(at: skillFile)
+                    ))
                 case .prompt:
                     // A directory named "foo.md" matches the extension check but is not a
                     // prompt file — surfacing it would make Task 7's adopt read a folder
@@ -75,11 +87,27 @@ public enum ExternalLibraryScanner {
                     guard entry.pathExtension == "md", !isDirectory else { continue }
                     items.append(ExternalItem(
                         name: entry.deletingPathExtension().lastPathComponent,
-                        kind: .prompt, origin: root.origin, url: entry
+                        kind: .prompt, origin: root.origin, url: entry,
+                        description: descriptionFromFrontmatter(at: entry)
                     ))
                 }
             }
         }
         return items
+    }
+
+    // A one-line preview for the card: the frontmatter `description` if present, else the
+    // first non-empty body line. Bounded and single-line so a card stays compact.
+    private static func descriptionFromFrontmatter(at url: URL) -> String {
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else { return "" }
+        let document = Frontmatter.parse(text)
+        let raw = document.fields["description"]
+            ?? document.body.split(separator: "\n").first { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+                .map(String.init)
+            ?? ""
+        let flattened = raw
+            .replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return String(flattened.prefix(200))
     }
 }

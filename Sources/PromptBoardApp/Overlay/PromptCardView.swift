@@ -20,9 +20,13 @@ struct PromptCardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             header
-            MarkdownText(markdown: item.previewText.trimmingCharacters(in: .whitespacesAndNewlines))
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .clipped()
+            MarkdownText(
+                markdown: MarkdownText.flattenedForPreview(
+                    item.previewText.trimmingCharacters(in: .whitespacesAndNewlines)
+                )
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .clipped()
             if !skillFiles.isEmpty { fileChips }
         }
         .padding(12)
