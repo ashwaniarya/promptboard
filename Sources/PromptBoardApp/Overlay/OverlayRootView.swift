@@ -65,29 +65,44 @@ struct OverlayRootView: View {
             .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.white.opacity(0.12)))
             .frame(maxWidth: .infinity)
 
-            Menu {
-                Button("New skill") { appState.beginCreatingSkill() }
-            } label: {
-                Image(systemName: "plus")
-                    .font(.title3.weight(.semibold))
-                    .frame(width: 40, height: 40)
-                    .background(Circle().fill(.white.opacity(0.08)))
-                    .overlay(Circle().strokeBorder(.white.opacity(0.12)))
-            } primaryAction: {
-                appState.beginCreating()
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .help("New (⌘N for prompt)")
-            .background(
-                Button("") { appState.beginCreating() }
-                    .keyboardShortcut("n", modifiers: .command)
-                    .hidden()
-            )
+            trailingControls
+        }
+    }
 
+    // The + menu and column toggle share one hit-testing surface that absorbs stray
+    // taps: without it, a near-miss on the small toggle falls through to the
+    // full-screen background gesture below and dismisses the overlay. The buttons
+    // keep working — a simultaneous gesture lets their taps through unaffected.
+    private var trailingControls: some View {
+        HStack(spacing: 12) {
+            newMenu
             columnToggle
         }
+        .contentShape(Rectangle())
+        .simultaneousGesture(TapGesture().onEnded {})
+    }
+
+    private var newMenu: some View {
+        Menu {
+            Button("New skill") { appState.beginCreatingSkill() }
+        } label: {
+            Image(systemName: "plus")
+                .font(.title3.weight(.semibold))
+                .frame(width: 40, height: 40)
+                .background(Circle().fill(.white.opacity(0.08)))
+                .overlay(Circle().strokeBorder(.white.opacity(0.12)))
+        } primaryAction: {
+            appState.beginCreating()
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("New (⌘N for prompt)")
+        .background(
+            Button("") { appState.beginCreating() }
+                .keyboardShortcut("n", modifiers: .command)
+                .hidden()
+        )
     }
 
     private var columnToggle: some View {
@@ -104,6 +119,7 @@ struct OverlayRootView: View {
                 .help("\(count) columns")
             }
         }
+        .background(RoundedRectangle(cornerRadius: 10).fill(.white.opacity(0.08)))
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.white.opacity(0.12)))
     }

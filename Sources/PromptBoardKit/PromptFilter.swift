@@ -27,7 +27,10 @@ public enum PromptFilter {
     public static func filter(_ items: [ExternalItem], query: String) -> [ExternalItem] {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedQuery.isEmpty else { return items }
-        return items.filter { matches($0.name, trimmedQuery) || matches($0.origin, trimmedQuery) }
+        return items.filter {
+            matches($0.name, trimmedQuery) || matches($0.origin, trimmedQuery)
+                || matches($0.description, trimmedQuery)
+        }
     }
 
     private static func matches(_ text: String, _ query: String) -> Bool {

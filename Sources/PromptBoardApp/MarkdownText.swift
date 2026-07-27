@@ -13,6 +13,24 @@ struct MarkdownText: View {
             .markdownTheme(.promptBoard)
             .textSelection(.enabled)
     }
+
+    // Card previews are compact and fixed-height, so a full-size `# H1` dominates the
+    // card and breaks the grid's visual rhythm. Demote ATX headings to bold text so a
+    // preview reads at body weight. The detail view keeps real headings, and the raw
+    // markdown (what actually gets copied) is untouched. We avoid MarkdownUI's block
+    // heading styles here because their closures build views in a nonisolated context,
+    // which Swift 6 strict concurrency rejects.
+    static func flattenedForPreview(_ markdown: String) -> String {
+        markdown.split(separator: "\n", omittingEmptySubsequences: false).map { line in
+            let stripped = line.drop { $0 == " " }
+            let hashes = stripped.prefix { $0 == "#" }
+            guard (1...6).contains(hashes.count) else { return String(line) }
+            let text = stripped.dropFirst(hashes.count).drop { $0 == " " }
+            guard !text.isEmpty else { return String(line) }
+            return "**\(text)**"
+        }
+        .joined(separator: "\n")
+    }
 }
 
 extension MarkdownUI.Theme {

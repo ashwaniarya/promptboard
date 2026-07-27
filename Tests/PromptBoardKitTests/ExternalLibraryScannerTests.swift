@@ -32,6 +32,31 @@ struct ExternalLibraryScannerTests {
         #expect(items[0].kind == .skill)
     }
 
+    @Test func readsTheSkillDescriptionFromItsFrontmatter() throws {
+        let directory = makeDirectory()
+        try makeSkill(named: "trello-card-reader", in: directory)
+
+        let items = ExternalLibraryScanner.scan(
+            roots: [.init(url: directory, origin: "Claude Code", kind: .skill)],
+            storageRoot: makeDirectory()
+        )
+
+        #expect(items.first?.description == "d")
+    }
+
+    @Test func fallsBackToTheFirstBodyLineWhenAPromptHasNoDescription() throws {
+        let directory = makeDirectory()
+        try "\n\nMake it readable.\nsecond line"
+            .write(to: directory.appendingPathComponent("readability.md"), atomically: true, encoding: .utf8)
+
+        let items = ExternalLibraryScanner.scan(
+            roots: [.init(url: directory, origin: "Claude Code", kind: .prompt)],
+            storageRoot: makeDirectory()
+        )
+
+        #expect(items.first?.description == "Make it readable.")
+    }
+
     @Test func findsTopLevelMarkdownInCommandRoots() throws {
         let directory = makeDirectory()
         try "Do the thing".write(

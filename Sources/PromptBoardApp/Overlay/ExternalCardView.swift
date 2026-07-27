@@ -35,14 +35,23 @@ struct ExternalCardView: View {
     private var card: some View {
         VStack(alignment: .leading, spacing: 8) {
             header
-            Text(item.url.path)
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
+            // Same content-forward layout as a prompt card: a body preview on top, a
+            // muted footer below. The body is the item's description (falling back to
+            // its path so the card is never empty); the footer keeps the location.
+            Text(item.description.isEmpty ? item.url.path : item.description)
+                .font(.system(size: 13))
+                .foregroundStyle(.white.opacity(0.82))
                 .lineLimit(4)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            Text("Read-only · adopt to edit")
-                .font(.system(size: 9.5))
-                .foregroundStyle(.tertiary)
+            HStack(spacing: 6) {
+                Text(item.url.path)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer(minLength: 8)
+                Text("Read-only · adopt to edit")
+            }
+            .font(.system(size: 9.5))
+            .foregroundStyle(.tertiary)
         }
         .padding(12)
         .frame(height: cardHeight, alignment: .top)
@@ -55,7 +64,7 @@ struct ExternalCardView: View {
 
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Image(systemName: isSkill ? "puzzlepiece.extension" : "doc.text")
+            Image(systemName: isSkill ? "puzzlepiece.extension.fill" : "doc.text")
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
             Text(item.name)
