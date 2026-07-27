@@ -9,6 +9,7 @@ import Observation
 public final class LibraryStore {
     public private(set) var items: [LibraryEntry] = []
     public private(set) var syncConflicts: [LibraryRepository.SyncConflict] = []
+    public private(set) var externalItems: [ExternalItem] = []
 
     private let repository: LibraryRepository
     private var lastSignature = ""
@@ -167,6 +168,25 @@ public final class LibraryStore {
         }
     }
 
+    // MARK: - External adoption
+
+    public func refreshExternalItems(roots: [ExternalLibraryScanner.Root] = ExternalLibraryScanner.defaultRoots()) {
+        externalItems = ExternalLibraryScanner.scan(roots: roots, storageRoot: repository.directoryURL)
+    }
+
+    @discardableResult
+    public func adoptExternal(_ item: ExternalItem, mode: LibraryRepository.AdoptMode) -> Bool {
+        do {
+            try repository.adoptExternal(item, mode: mode)
+            refreshFromDisk()
+            refreshExternalItems()
+            return true
+        } catch {
+            reportFailure(error)
+            return false
+        }
+    }
+
     // MARK: - Live reload
 
     public func startWatchingForExternalChanges() {
@@ -210,6 +230,7 @@ public final class LibraryStore {
             _ = try? repository.seedPromptsIfEmpty(SeedPrompts.samples)
         }
         refreshFromDisk()
+        refreshExternalItems()
     }
 
     // Reads the on-disk state back after our own writes so the resulting signature
