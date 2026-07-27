@@ -118,6 +118,22 @@ struct ExternalLibraryScannerTests {
         #expect(items.map(\.name) == ["alpha", "zeta", "middle"])
     }
 
+    @Test func skipsADirectoryNamedLikeAMarkdownFileInAPromptRoot() throws {
+        let directory = makeDirectory()
+        try FileManager.default.createDirectory(
+            at: directory.appendingPathComponent("weird.md", isDirectory: true),
+            withIntermediateDirectories: true
+        )
+        try "real".write(to: directory.appendingPathComponent("actual.md"), atomically: true, encoding: .utf8)
+
+        let items = ExternalLibraryScanner.scan(
+            roots: [.init(url: directory, origin: "Claude Code", kind: .prompt)],
+            storageRoot: makeDirectory()
+        )
+
+        #expect(items.map(\.name) == ["actual"])
+    }
+
     @Test func skipsFoldersWithoutASkillFile() throws {
         let directory = makeDirectory()
         try FileManager.default.createDirectory(

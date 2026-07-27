@@ -68,7 +68,11 @@ public enum ExternalLibraryScanner {
                     guard FileManager.default.fileExists(atPath: skillFile.path) else { continue }
                     items.append(ExternalItem(name: name, kind: .skill, origin: root.origin, url: entry))
                 case .prompt:
-                    guard entry.pathExtension == "md" else { continue }
+                    // A directory named "foo.md" matches the extension check but is not a
+                    // prompt file — surfacing it would make Task 7's adopt read a folder
+                    // as file content. Require a regular file.
+                    let isDirectory = (try? entry.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
+                    guard entry.pathExtension == "md", !isDirectory else { continue }
                     items.append(ExternalItem(
                         name: entry.deletingPathExtension().lastPathComponent,
                         kind: .prompt, origin: root.origin, url: entry
