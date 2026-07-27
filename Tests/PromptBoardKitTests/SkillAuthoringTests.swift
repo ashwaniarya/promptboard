@@ -58,6 +58,15 @@ struct SkillAuthoringTests {
         }
     }
 
+    @Test func relinkAllSkillsCountsEachSkillOnceNotOncePerTargetDirectory() throws {
+        let (repository, _, _) = makeRepository()
+        _ = try repository.createSkill(name: "One", description: "d", group: nil, body: "b")
+        _ = try repository.createSkill(name: "Two", description: "d", group: nil, body: "b")
+
+        // Each skill links into both targets, so a per-outcome count would report 4.
+        #expect(try repository.relinkAllSkills() == 2)
+    }
+
     @Test func createSkillDeDupesFolderNameCaseInsensitively() throws {
         let (repository, _, _) = makeRepository()
         _ = try repository.createSkill(name: "note", description: "one", group: nil, body: "")

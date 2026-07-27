@@ -53,14 +53,29 @@ struct SymlinkManagerTests {
         let ours = makeDirectory()
         let foreign = makeDirectory()
         SymlinkManager.link(source: source, into: [ours], name: "my-skill")
-        let foreignFolder = foreign.appendingPathComponent("my-skill", isDirectory: true)
-        try FileManager.default.createDirectory(at: foreignFolder, withIntermediateDirectories: true)
+        // A foreign symlink pointing somewhere that is NOT our expectedTarget. This is
+        // what exercises the expectedTarget no-clobber guard: a real directory would be
+        // rejected earlier by the is-it-a-symlink check, leaving that guard untested.
+        let elsewhere = makeDirectory()
+        let foreignLink = foreign.appendingPathComponent("my-skill")
+        try FileManager.default.createSymbolicLink(at: foreignLink, withDestinationURL: elsewhere)
 
         SymlinkManager.unlink(name: "my-skill", from: [ours, foreign], expectedTarget: source)
 
         #expect((try? FileManager.default.destinationOfSymbolicLink(
             atPath: ours.appendingPathComponent("my-skill").path)) == nil)
-        #expect(FileManager.default.fileExists(atPath: foreignFolder.path))
+        #expect((try? FileManager.default.destinationOfSymbolicLink(atPath: foreignLink.path)) != nil)
+    }
+
+    @Test func isOwnedRejectsASiblingRootThatSharesAPathPrefix() throws {
+        let parent = makeDirectory()
+        let storage = parent.appendingPathComponent("pb", isDirectory: true)
+        let sibling = parent.appendingPathComponent("pb-other", isDirectory: true)
+        let source = try makeSource(in: sibling, named: "my-skill")
+        let target = makeDirectory()
+        SymlinkManager.link(source: source, into: [target], name: "my-skill")
+
+        #expect(!SymlinkManager.isOwned(target.appendingPathComponent("my-skill"), byStorageRoot: storage))
     }
 
     @Test func isOwnedRecognisesLinksPointingIntoOurStorage() throws {
