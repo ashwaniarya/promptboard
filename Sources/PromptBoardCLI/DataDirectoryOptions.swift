@@ -21,10 +21,6 @@ struct DataDirectoryOptions: ParsableArguments {
     }
 
     var repository: LibraryRepository {
-        let claudeSkillsURL = ProcessInfo.processInfo.environment["PROMPTBOARD_CLAUDE_SKILLS_DIR"]
-            .flatMap { $0.isEmpty ? nil : $0 }
-            .map { URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath, isDirectory: true) }
-            ?? LibraryRepository.defaultClaudeSkillsURL
-        return LibraryRepository(directoryURL: resolvedDirectoryURL, claudeSkillsURL: claudeSkillsURL)
+        LibraryRepository(directoryURL: resolvedDirectoryURL, syncTargets: .systemDefault())
     }
 }

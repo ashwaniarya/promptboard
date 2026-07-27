@@ -17,6 +17,18 @@ Press **⌥/** (option-slash) in any app to drop a compact search popup at your 
 - The popup lists **prompts only** — skills stay agent-invoked (via the `~/.claude/skills` symlink / MCP).
 - Insertion pastes via the clipboard and restores it afterward (text only). Positioning uses the Accessibility caret rect, falling back to the mouse when an app doesn't expose it.
 
+## Cross-tool sync
+
+PromptBoard syncs your prompts and skills to every agent CLI on the machine — **Claude Code, Codex, Cursor, and OpenCode** — so a prompt you save here becomes a `/slash-command` everywhere.
+
+- **Two directories reach all four tools.** Skills are symlinked into **`~/.agents/skills`** (read by Codex, Cursor, OpenCode) and **`~/.claude/skills`** (read by Claude Code). Their union is complete coverage — no per-tool fan-out.
+- **Prompts sync as skills.** Each prompt is rendered into a minimal Agent Skill under `~/Library/Application Support/PromptBoard/Export/skills/<slug>/` (a `SKILL.md` marked `disable-model-invocation: true`, plus `agents/openai.yaml` for Codex), then symlinked into both dirs. So `/code-review` shows up as a user-invoked command in each tool. Editing the prompt regenerates it; deleting it removes the links.
+- **Nothing is copied — everything is a symlink** back into your library, so edits propagate instantly with no sync step and no drift. Ownership is derived from where a link resolves (no manifest file); a path PromptBoard didn't create is never touched, and a name clash surfaces as a **conflict badge** rather than an overwrite.
+- **Adopt what already lives in your tools.** Skills sitting in any tool's own directory show on the board as read-only cards **badged by origin**. **Adopt** one to pull it into your library: **Copy** leaves the original untouched, **Move** backs it up (a hidden `.<name>.promptboard-backup-*`) and replaces it with a link so it then syncs everywhere. Toggle **Show external** in the sidebar to hide them.
+- **Left alone:** Codex's `~/.codex/skills/.system` cache and Cursor's tool-managed `~/.cursor/skills-cursor`.
+
+> Claude Code is confirmed to load symlinked skills (this is how it already picks up `~/.claude/skills` links). Cursor and OpenCode read the same directories via standard globbing, which is symlink-transparent; if a future tool version filters symlinks, the sync layer can mirror real copies into that one tool's dir.
+
 ## Library layout
 
 Everything lives as human-readable files under `~/Library/Application Support/PromptBoard/Library/`:
@@ -89,8 +101,10 @@ args = ["mcp"]
 
 - `PROMPTBOARD_SHOW_ON_LAUNCH=1` — open the overlay immediately at launch
 - `PROMPTBOARD_DATA_DIR=/path` — use a different library directory (keeps your real library untouched)
-- `PROMPTBOARD_CLAUDE_SKILLS_DIR=/path` — where the CLI/MCP symlink skills (default `~/.claude/skills`); handy for isolated tests
-- `PROMPTBOARD_DEBUG=1` — listen for distributed notifications used for scripted UI verification: `com.arya.PromptBoard.debug.toggle` (toggle overlay), `…debug.newPrompt` (open overlay + blank editor), `…debug.commandKey` (replay a ⌘-key equivalent; object = character, e.g. `"v"`), `…debug.dumpState` (log key window, first responder, and each text field's value/focus), `…debug.dumpPrompts` (log item count + titles), `…debug.snapshot` (write a PNG of the overlay content; object = output path). Skill-editor hooks: `…debug.createSampleSkill` (object = name), `…debug.editFirstSkill`, `…debug.newSkill`, `…debug.convertFirstPrompt`, `…debug.confirmConvertFirst`, `…debug.addSampleFiles`. Post one with:
+- `PROMPTBOARD_CLAUDE_SKILLS_DIR=/path` — one of the two sync target dirs (default `~/.claude/skills`); handy for isolated tests
+- `PROMPTBOARD_AGENTS_SKILLS_DIR=/path` — the other sync target dir (default `~/.agents/skills`). Both must be absolute (a `~` is expanded; a relative value is ignored with a warning, so a stray value never scatters links)
+- `PROMPTBOARD_EXTERNAL_SCAN_ROOTS=/a:/b` — colon-separated absolute paths to scan for adoptable external items, **replacing** the built-in per-tool table (everything found is badged `External`); essential for isolating the adopt flow in tests away from your real tool dirs
+- `PROMPTBOARD_DEBUG=1` — listen for distributed notifications used for scripted UI verification: `com.arya.PromptBoard.debug.toggle` (toggle overlay), `…debug.newPrompt` (open overlay + blank editor), `…debug.commandKey` (replay a ⌘-key equivalent; object = character, e.g. `"v"`), `…debug.dumpState` (log key window, first responder, and each text field's value/focus), `…debug.dumpPrompts` (log item count + titles), `…debug.snapshot` (write a PNG of the overlay content; object = output path). Skill-editor hooks: `…debug.createSampleSkill` (object = name), `…debug.editFirstSkill`, `…debug.newSkill`, `…debug.convertFirstPrompt`, `…debug.confirmConvertFirst`, `…debug.addSampleFiles`. Cross-tool-sync hooks: `…debug.dumpExternal` (log discovered external items + origins), `…debug.adoptFirstExternal` (object = `"move"` / `"copy"`), `…debug.beginAdoptFirst` (open the adopt sheet without committing), `…debug.dumpSyncConflicts`. Post one with:
 
   ```bash
   swift -e 'import Foundation; DistributedNotificationCenter.default().postNotificationName(Notification.Name("com.arya.PromptBoard.debug.dumpState"), object: nil, userInfo: nil, deliverImmediately: true); Thread.sleep(forTimeInterval: 0.3)'
@@ -122,3 +136,6 @@ args = ["mcp"]
 22. Hover a prompt **✦** → **Convert to skill** → name prefilled; add a description → **Convert** → a skill opens in the editor with the prompt's content as its `SKILL.md` body, and the original prompt is gone (unless "keep the original prompt" is checked).
 23. Grant Accessibility to PromptBoard, then in TextEdit press **⌥/** → a compact popup appears at the caret; type `/code-review` (or `review`) → the list ranks/filters; **⏎** inserts the prompt's text at the cursor and the clipboard is restored. ⌥Space board still works independently.
 24. Before granting Accessibility, ⌥/ → picking a prompt **copies** it and raises the permission prompt instead of inserting.
+25. Add a prompt → within ~1s a `<slug>` skill link appears in **both** `~/.agents/skills` and `~/.claude/skills` (and `Export/skills/<slug>/SKILL.md` is generated); `claude` offers it as `/<slug>`. Delete the prompt → both links and the export vanish. A foreign folder already at that name is left untouched and the card shows a conflict badge.
+26. A skill living only in another tool (e.g. `~/.codex/skills/<x>`) shows as a dimmed **external** card badged by origin. **Adopt → Copy** leaves the original byte-identical and adds it to the library (now synced to all tools); **Adopt → Move** replaces the original with a link and leaves a hidden `.<x>.promptboard-backup-*`. **Show external** in the sidebar hides these.
+27. `find ~/.agents/skills ~/.claude/skills -type l ! -exec test -e {} \;` prints nothing — no dangling links left by any add/edit/delete/rename/adopt.

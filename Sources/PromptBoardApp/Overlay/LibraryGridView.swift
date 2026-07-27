@@ -20,7 +20,7 @@ struct LibraryGridView: View {
 
     @ViewBuilder
     private var content: some View {
-        if appState.visibleItems.isEmpty {
+        if appState.visibleItems.isEmpty && appState.externalItems.isEmpty {
             emptyState.padding(.top, 120)
         } else {
             LazyVGrid(
@@ -32,6 +32,9 @@ struct LibraryGridView: View {
             ) {
                 ForEach(appState.visibleItems) { item in
                     PromptCardView(item: item, appState: appState)
+                }
+                ForEach(appState.externalItems) { item in
+                    ExternalCardView(item: item, appState: appState)
                 }
             }
             .padding(.horizontal, horizontalPadding)

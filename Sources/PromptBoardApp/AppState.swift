@@ -38,6 +38,8 @@ final class AppState {
     var expandedItem: LibraryEntry?
     var skillEditorMode: SkillEditorMode?
     var convertingPrompt: Prompt?
+    var showExternalItems = true
+    var adoptingItem: ExternalItem?
 
     var skillEditorIdentity: String {
         switch skillEditorMode {
@@ -64,6 +66,10 @@ final class AppState {
             .sorted { $0.updatedAt > $1.updatedAt }
     }
 
+    var externalItems: [ExternalItem] {
+        showExternalItems ? store.externalItems : []
+    }
+
     var groupCounts: [(name: String, count: Int)] {
         var counts: [String: Int] = [:]
         for item in store.items {
@@ -82,10 +88,13 @@ final class AppState {
         expandedItem = nil
         skillEditorMode = nil
         convertingPrompt = nil
+        adoptingItem = nil
     }
 
     func handleEscape() {
-        if convertingPrompt != nil {
+        if adoptingItem != nil {
+            adoptingItem = nil
+        } else if convertingPrompt != nil {
             convertingPrompt = nil
         } else if skillEditorMode != nil {
             skillEditorMode = nil
@@ -101,7 +110,9 @@ final class AppState {
     }
 
     func handleBackgroundClick() {
-        if convertingPrompt != nil {
+        if adoptingItem != nil {
+            adoptingItem = nil
+        } else if convertingPrompt != nil {
             convertingPrompt = nil
         } else if skillEditorMode != nil {
             skillEditorMode = nil
@@ -169,6 +180,16 @@ final class AppState {
 
     func beginConverting(_ prompt: Prompt) {
         convertingPrompt = prompt
+    }
+
+    func beginAdopting(_ item: ExternalItem) {
+        adoptingItem = item
+    }
+
+    func confirmAdopt(mode: LibraryRepository.AdoptMode) {
+        guard let item = adoptingItem else { return }
+        store.adoptExternal(item, mode: mode)
+        adoptingItem = nil
     }
 
     // Create's first save materializes the folder, then reopens in edit mode so

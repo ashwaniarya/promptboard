@@ -8,10 +8,14 @@ struct SkillAuthoringTests {
             .appendingPathComponent("PromptBoardAuthoringTests-\(UUID().uuidString)", isDirectory: true)
     }
 
+    private func targets(claude: URL) -> SyncTargets {
+        SyncTargets(claudeSkillsURL: claude, agentsSkillsURL: temporaryDirectory())
+    }
+
     func makeRepository() -> (LibraryRepository, directory: URL, claude: URL) {
         let directory = temporaryDirectory()
         let claude = temporaryDirectory()
-        return (LibraryRepository(directoryURL: directory, claudeSkillsURL: claude), directory, claude)
+        return (LibraryRepository(directoryURL: directory, syncTargets: targets(claude: claude)), directory, claude)
     }
 
     @Test func createSkillWritesPureFrontmatterSidecarAndLink() throws {
@@ -35,6 +39,32 @@ struct SkillAuthoringTests {
         #expect(FileManager.default.fileExists(atPath: folder.appendingPathComponent(".promptboard.json").path))
         #expect((try? FileManager.default.destinationOfSymbolicLink(
             atPath: claude.appendingPathComponent("deploy-runbook").path)) != nil)
+    }
+
+    @Test func createSkillLinksIntoBothTargetDirectories() throws {
+        let directory = temporaryDirectory()
+        let claude = temporaryDirectory()
+        let agents = temporaryDirectory()
+        let repository = LibraryRepository(
+            directoryURL: directory,
+            syncTargets: SyncTargets(claudeSkillsURL: claude, agentsSkillsURL: agents)
+        )
+
+        _ = try repository.createSkill(name: "Deploy Runbook", description: "d", group: nil, body: "# Deploy")
+
+        for target in [claude, agents] {
+            #expect((try? FileManager.default.destinationOfSymbolicLink(
+                atPath: target.appendingPathComponent("deploy-runbook").path)) != nil)
+        }
+    }
+
+    @Test func relinkAllSkillsCountsEachSkillOnceNotOncePerTargetDirectory() throws {
+        let (repository, _, _) = makeRepository()
+        _ = try repository.createSkill(name: "One", description: "d", group: nil, body: "b")
+        _ = try repository.createSkill(name: "Two", description: "d", group: nil, body: "b")
+
+        // Each skill links into both targets, so a per-outcome count would report 4.
+        #expect(try repository.relinkAllSkills() == 2)
     }
 
     @Test func createSkillDeDupesFolderNameCaseInsensitively() throws {

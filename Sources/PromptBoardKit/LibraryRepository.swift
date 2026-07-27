@@ -16,7 +16,7 @@ public enum LibraryRepositoryError: Error, Sendable {
 // Non-reentrant: never call the self-locking conveniences from inside `body`.
 public struct LibraryRepository: Sendable {
     public let directoryURL: URL
-    public let claudeSkillsURL: URL
+    public let syncTargets: SyncTargets
 
     public var libraryURL: URL { directoryURL.appendingPathComponent("Library", isDirectory: true) }
     public var promptsDirectoryURL: URL { libraryURL.appendingPathComponent("prompts", isDirectory: true) }
@@ -29,14 +29,9 @@ public struct LibraryRepository: Sendable {
             .appendingPathComponent("PromptBoard", isDirectory: true)
     }
 
-    public static var defaultClaudeSkillsURL: URL {
-        FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".claude/skills", isDirectory: true)
-    }
-
-    public init(directoryURL: URL, claudeSkillsURL: URL = LibraryRepository.defaultClaudeSkillsURL) {
+    public init(directoryURL: URL, syncTargets: SyncTargets) {
         self.directoryURL = directoryURL
-        self.claudeSkillsURL = claudeSkillsURL
+        self.syncTargets = syncTargets
     }
 
     // MARK: - Loading
@@ -309,9 +304,9 @@ extension LibraryRepository {
             }
             let now = Date()
             try writeSidecar(SkillSidecar(id: UUID(), group: group, createdAt: now, updatedAt: now), in: destination)
-            let outcome = SymlinkManager.link(source: destination, into: claudeSkillsURL, name: folderName)
-            if outcome.conflicted {
-                logWarning("skill \"\(folderName)\" not linked: \(claudeSkillsURL.appendingPathComponent(folderName).path) already exists and isn't ours")
+            let outcomes = SymlinkManager.link(source: destination, into: syncTargets.all, name: folderName)
+            for (directory, outcome) in zip(syncTargets.all, outcomes) where outcome.conflicted {
+                logWarning("skill \"\(folderName)\" not linked: \(directory.appendingPathComponent(folderName).path) already exists and isn't ours")
             }
             guard let skill = readSkill(at: destination) else {
                 throw LibraryRepositoryError.invalidSkillSource(path: destination.path)
@@ -347,7 +342,7 @@ extension LibraryRepository {
                 throw LibraryRepositoryError.skillNotFound(id)
             }
             SymlinkManager.unlink(
-                name: found.url.lastPathComponent, from: claudeSkillsURL, expectedTarget: found.url
+                name: found.url.lastPathComponent, from: syncTargets.all, expectedTarget: found.url
             )
             do {
                 try FileManager.default.removeItem(at: found.url)
@@ -363,10 +358,10 @@ extension LibraryRepository {
     public func relinkAllSkills() throws -> Int {
         try withExclusiveLock {
             skillFolderURLs().reduce(into: 0) { linked, folderURL in
-                let outcome = SymlinkManager.link(
-                    source: folderURL, into: claudeSkillsURL, name: folderURL.lastPathComponent
+                let outcomes = SymlinkManager.link(
+                    source: folderURL, into: syncTargets.all, name: folderURL.lastPathComponent
                 )
-                if outcome.linked { linked += 1 }
+                if outcomes.contains(where: \.linked) { linked += 1 }
             }
         }
     }

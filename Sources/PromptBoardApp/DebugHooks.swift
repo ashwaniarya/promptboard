@@ -19,6 +19,10 @@ enum DebugHooks {
     static let quickInsertNotification = "com.arya.PromptBoard.debug.quickInsert"
     static let testInsertClipboardNotification = "com.arya.PromptBoard.debug.testInsertClipboard"
     static let insertFirstResultNotification = "com.arya.PromptBoard.debug.insertFirstResult"
+    static let dumpExternalNotification = "com.arya.PromptBoard.debug.dumpExternal"
+    static let adoptFirstExternalNotification = "com.arya.PromptBoard.debug.adoptFirstExternal"
+    static let dumpSyncConflictsNotification = "com.arya.PromptBoard.debug.dumpSyncConflicts"
+    static let beginAdoptFirstNotification = "com.arya.PromptBoard.debug.beginAdoptFirst"
 
     static var isEnabled: Bool {
         ProcessInfo.processInfo.environment["PROMPTBOARD_DEBUG"] == "1"
@@ -53,6 +57,10 @@ enum DebugHooks {
             (quickInsertNotification, #selector(DebugHookTarget.handleQuickInsert(_:))),
             (testInsertClipboardNotification, #selector(DebugHookTarget.handleTestInsertClipboard(_:))),
             (insertFirstResultNotification, #selector(DebugHookTarget.handleInsertFirstResult(_:))),
+            (dumpExternalNotification, #selector(DebugHookTarget.handleDumpExternal(_:))),
+            (adoptFirstExternalNotification, #selector(DebugHookTarget.handleAdoptFirstExternal(_:))),
+            (dumpSyncConflictsNotification, #selector(DebugHookTarget.handleDumpSyncConflicts(_:))),
+            (beginAdoptFirstNotification, #selector(DebugHookTarget.handleBeginAdoptFirst(_:))),
         ]
         for (name, selector) in hooks {
             center.addObserver(
@@ -252,6 +260,57 @@ private final class DebugHookTarget: NSObject {
             let items = appState.store.items
             let titles = items.map(\.title).joined(separator: " | ")
             NSLog("%@", "PromptBoardDebug items: count=\(items.count) titles=\(titles)")
+        }
+    }
+
+    @objc nonisolated func handleDumpExternal(_ notification: Notification) {
+        MainActor.assumeIsolated {
+            appState.store.refreshExternalItems()
+            let external = appState.store.externalItems
+            NSLog("%@", "PromptBoardDebug external: count=\(external.count)")
+            for item in external {
+                NSLog("%@", "PromptBoardDebug external item: name=\(item.name) origin=\(item.origin) kind=\(item.kind.rawValue)")
+            }
+        }
+    }
+
+    @objc nonisolated func handleAdoptFirstExternal(_ notification: Notification) {
+        let mode: LibraryRepository.AdoptMode = (notification.object as? String == "move") ? .move : .copy
+        MainActor.assumeIsolated {
+            appState.store.refreshExternalItems()
+            guard let item = appState.externalItems.first else {
+                NSLog("%@", "PromptBoardDebug adoptFirstExternal -> no external item")
+                return
+            }
+            appState.adoptingItem = item
+            let ok = appState.store.adoptExternal(item, mode: mode)
+            appState.adoptingItem = nil
+            NSLog("%@", "PromptBoardDebug adoptFirstExternal name=\(item.name) mode=\(mode == .move ? "move" : "copy") ok=\(ok) items=\(appState.store.items.count)")
+        }
+    }
+
+    @objc nonisolated func handleDumpSyncConflicts(_ notification: Notification) {
+        MainActor.assumeIsolated {
+            let conflicts = appState.store.syncConflicts
+            NSLog("%@", "PromptBoardDebug syncConflicts: count=\(conflicts.count)")
+            for conflict in conflicts {
+                NSLog("%@", "PromptBoardDebug syncConflict: name=\(conflict.name) reason=\(conflict.reason)")
+            }
+        }
+    }
+
+    // Opens the adopt sheet without committing, mirroring convertFirstPrompt, so the
+    // harness can render AdoptExternalSheet on the board.
+    @objc nonisolated func handleBeginAdoptFirst(_ notification: Notification) {
+        MainActor.assumeIsolated {
+            overlayController.show()
+            appState.store.refreshExternalItems()
+            guard let item = appState.externalItems.first else {
+                NSLog("%@", "PromptBoardDebug beginAdoptFirst -> no external item")
+                return
+            }
+            appState.beginAdopting(item)
+            NSLog("%@", "PromptBoardDebug beginAdoptFirst -> \(item.name)")
         }
     }
 

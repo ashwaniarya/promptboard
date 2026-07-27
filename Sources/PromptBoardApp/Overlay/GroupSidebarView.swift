@@ -2,7 +2,7 @@ import SwiftUI
 import PromptBoardKit
 
 struct GroupSidebarView: View {
-    let appState: AppState
+    @Bindable var appState: AppState
     private let accent = Color(red: 0.49, green: 0.51, blue: 1.0)
 
     var body: some View {
@@ -19,6 +19,13 @@ struct GroupSidebarView: View {
             }
 
             Spacer(minLength: 0)
+
+            Toggle("Show external", isOn: $appState.showExternalItems)
+                .toggleStyle(.switch).controlSize(.small)
+                .font(.system(size: 12))
+                .foregroundStyle(.white.opacity(0.66))
+                .padding(.horizontal, 11)
+                .padding(.bottom, 12)
         }
         .padding(.top, 64)
         .padding(.horizontal, 10)

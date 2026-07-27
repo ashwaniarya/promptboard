@@ -88,13 +88,13 @@ extension LibraryRepository {
         }
     }
 
-    // Renames a library skill folder and re-points its ~/.claude/skills symlink.
+    // Renames a library skill folder and re-points its tool-directory symlinks.
     // The library namespace is ours, so the move can't collide; only the new symlink
     // path can be foreign — in which case the folder still renames and we warn.
     func renameSkillFolder(from oldURL: URL, to newFolderName: String) throws -> URL {
         let oldFolderName = oldURL.lastPathComponent
         let newURL = skillFolderURL(name: newFolderName)
-        SymlinkManager.unlink(name: oldFolderName, from: claudeSkillsURL, expectedTarget: oldURL)
+        SymlinkManager.unlink(name: oldFolderName, from: syncTargets.all, expectedTarget: oldURL)
         do {
             try FileManager.default.moveItem(at: oldURL, to: newURL)
         } catch {
@@ -208,9 +208,20 @@ extension LibraryRepository {
     }
 
     func linkSkill(at destination: URL, name: String) {
-        let outcome = SymlinkManager.link(source: destination, into: claudeSkillsURL, name: name)
-        if outcome.conflicted {
-            logWarning("skill \"\(name)\" not linked: \(claudeSkillsURL.appendingPathComponent(name).path) already exists and isn't ours")
+        for directory in syncTargets.all {
+            let linkURL = directory.appendingPathComponent(name)
+            // Our own stale link — e.g. a prompt export the slug is being promoted over —
+            // resolves inside storage but not at the new source. Repoint it silently, the
+            // same way reconcile does; the alternative was a "not linked … isn't ours"
+            // warning about a link that is, in fact, ours. Foreign entries (isOwned false)
+            // are never removed and still surface the genuine no-clobber warning below.
+            if SymlinkManager.isOwned(linkURL, byStorageRoot: directoryURL),
+               SymlinkManager.resolvedDestination(of: linkURL)?.path != destination.standardizedFileURL.path {
+                try? FileManager.default.removeItem(at: linkURL)
+            }
+            if SymlinkManager.link(source: destination, into: directory, name: name).conflicted {
+                logWarning("skill \"\(name)\" not linked: \(linkURL.path) already exists and isn't ours")
+            }
         }
     }
 }
