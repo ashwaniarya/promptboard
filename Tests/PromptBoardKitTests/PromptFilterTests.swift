@@ -9,8 +9,33 @@ struct PromptFilterTests {
         Prompt(title: "Meeting Notes", content: "Summarize KEY decisions"),
     ]
 
+    private let externalItems = [
+        ExternalItem(name: "trello-card-reader", kind: .skill, origin: "Claude Code",
+                     url: URL(fileURLWithPath: "/x/trello-card-reader")),
+        ExternalItem(name: "vercel-deploy", kind: .skill, origin: "Codex",
+                     url: URL(fileURLWithPath: "/x/vercel-deploy")),
+    ]
+
     @Test func emptyQueryReturnsAllPrompts() {
         #expect(PromptFilter.filter(prompts, query: "").count == 3)
+    }
+
+    @Test func emptyQueryReturnsAllExternalItems() {
+        #expect(PromptFilter.filter(externalItems, query: "").count == 2)
+    }
+
+    @Test func matchesExternalItemByName() {
+        let result = PromptFilter.filter(externalItems, query: "trello")
+        #expect(result.map(\.name) == ["trello-card-reader"])
+    }
+
+    @Test func matchesExternalItemByOriginCaseInsensitively() {
+        let result = PromptFilter.filter(externalItems, query: "codex")
+        #expect(result.map(\.name) == ["vercel-deploy"])
+    }
+
+    @Test func nonMatchingQueryReturnsNoExternalItems() {
+        #expect(PromptFilter.filter(externalItems, query: "nonexistent").isEmpty)
     }
 
     @Test func whitespaceOnlyQueryReturnsAllPrompts() {
