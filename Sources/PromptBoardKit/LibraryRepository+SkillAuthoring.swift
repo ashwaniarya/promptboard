@@ -208,9 +208,20 @@ extension LibraryRepository {
     }
 
     func linkSkill(at destination: URL, name: String) {
-        let outcomes = SymlinkManager.link(source: destination, into: syncTargets.all, name: name)
-        for (directory, outcome) in zip(syncTargets.all, outcomes) where outcome.conflicted {
-            logWarning("skill \"\(name)\" not linked: \(directory.appendingPathComponent(name).path) already exists and isn't ours")
+        for directory in syncTargets.all {
+            let linkURL = directory.appendingPathComponent(name)
+            // Our own stale link — e.g. a prompt export the slug is being promoted over —
+            // resolves inside storage but not at the new source. Repoint it silently, the
+            // same way reconcile does; the alternative was a "not linked … isn't ours"
+            // warning about a link that is, in fact, ours. Foreign entries (isOwned false)
+            // are never removed and still surface the genuine no-clobber warning below.
+            if SymlinkManager.isOwned(linkURL, byStorageRoot: directoryURL),
+               SymlinkManager.resolvedDestination(of: linkURL)?.path != destination.standardizedFileURL.path {
+                try? FileManager.default.removeItem(at: linkURL)
+            }
+            if SymlinkManager.link(source: destination, into: directory, name: name).conflicted {
+                logWarning("skill \"\(name)\" not linked: \(linkURL.path) already exists and isn't ours")
+            }
         }
     }
 }
