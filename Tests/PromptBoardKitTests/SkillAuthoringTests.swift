@@ -41,6 +41,23 @@ struct SkillAuthoringTests {
             atPath: claude.appendingPathComponent("deploy-runbook").path)) != nil)
     }
 
+    @Test func createSkillLinksIntoBothTargetDirectories() throws {
+        let directory = temporaryDirectory()
+        let claude = temporaryDirectory()
+        let agents = temporaryDirectory()
+        let repository = LibraryRepository(
+            directoryURL: directory,
+            syncTargets: SyncTargets(claudeSkillsURL: claude, agentsSkillsURL: agents)
+        )
+
+        _ = try repository.createSkill(name: "Deploy Runbook", description: "d", group: nil, body: "# Deploy")
+
+        for target in [claude, agents] {
+            #expect((try? FileManager.default.destinationOfSymbolicLink(
+                atPath: target.appendingPathComponent("deploy-runbook").path)) != nil)
+        }
+    }
+
     @Test func createSkillDeDupesFolderNameCaseInsensitively() throws {
         let (repository, _, _) = makeRepository()
         _ = try repository.createSkill(name: "note", description: "one", group: nil, body: "")

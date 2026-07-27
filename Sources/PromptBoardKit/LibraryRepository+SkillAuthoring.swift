@@ -88,13 +88,13 @@ extension LibraryRepository {
         }
     }
 
-    // Renames a library skill folder and re-points its ~/.claude/skills symlink.
+    // Renames a library skill folder and re-points its tool-directory symlinks.
     // The library namespace is ours, so the move can't collide; only the new symlink
     // path can be foreign — in which case the folder still renames and we warn.
     func renameSkillFolder(from oldURL: URL, to newFolderName: String) throws -> URL {
         let oldFolderName = oldURL.lastPathComponent
         let newURL = skillFolderURL(name: newFolderName)
-        SymlinkManager.unlink(name: oldFolderName, from: claudeSkillsURL, expectedTarget: oldURL)
+        SymlinkManager.unlink(name: oldFolderName, from: syncTargets.all, expectedTarget: oldURL)
         do {
             try FileManager.default.moveItem(at: oldURL, to: newURL)
         } catch {
@@ -208,9 +208,9 @@ extension LibraryRepository {
     }
 
     func linkSkill(at destination: URL, name: String) {
-        let outcome = SymlinkManager.link(source: destination, into: claudeSkillsURL, name: name)
-        if outcome.conflicted {
-            logWarning("skill \"\(name)\" not linked: \(claudeSkillsURL.appendingPathComponent(name).path) already exists and isn't ours")
+        let outcomes = SymlinkManager.link(source: destination, into: syncTargets.all, name: name)
+        for (directory, outcome) in zip(syncTargets.all, outcomes) where outcome.conflicted {
+            logWarning("skill \"\(name)\" not linked: \(directory.appendingPathComponent(name).path) already exists and isn't ours")
         }
     }
 }
