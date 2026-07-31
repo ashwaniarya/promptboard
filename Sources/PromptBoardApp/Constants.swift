@@ -9,5 +9,6 @@ enum Constants {
     static let quickInsertModifiers = UInt32(optionKey)
     static let blurMaterial: NSVisualEffectView.Material = .fullScreenUI
     static let searchFieldPlaceholder = "Search prompts…"
+    static let toolbarControlHeight: CGFloat = 44
     static let editorTitlePlaceholder = "Prompt title"
 }

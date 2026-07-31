@@ -60,7 +60,7 @@ struct OverlayRootView: View {
                     .onExitCommand { appState.handleEscape() }
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .frame(height: Constants.toolbarControlHeight)
             .background(RoundedRectangle(cornerRadius: 12).fill(.white.opacity(0.08)))
             .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.white.opacity(0.12)))
             .frame(maxWidth: .infinity)
@@ -88,7 +88,7 @@ struct OverlayRootView: View {
         } label: {
             Image(systemName: "plus")
                 .font(.title3.weight(.semibold))
-                .frame(width: 40, height: 40)
+                .frame(width: Constants.toolbarControlHeight, height: Constants.toolbarControlHeight)
                 .background(Circle().fill(.white.opacity(0.08)))
                 .overlay(Circle().strokeBorder(.white.opacity(0.12)))
         } primaryAction: {
@@ -112,7 +112,7 @@ struct OverlayRootView: View {
                     Image(systemName: columnIcon(count))
                         .font(.system(size: 13))
                         .foregroundStyle(appState.columnCount == count ? .primary : .secondary)
-                        .frame(width: 32, height: 34)
+                        .frame(width: 32, height: Constants.toolbarControlHeight)
                         .background(appState.columnCount == count ? Color.white.opacity(0.14) : .clear)
                 }
                 .buttonStyle(.plain)
