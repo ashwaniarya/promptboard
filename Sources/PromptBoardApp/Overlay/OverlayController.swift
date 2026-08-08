@@ -6,6 +6,7 @@ import PromptBoardKit
 final class OverlayController {
     private let appState: AppState
     private var panel: OverlayPanel?
+    private var swipeMonitor: Any?
 
     init(appState: AppState) {
         self.appState = appState
@@ -37,11 +38,31 @@ final class OverlayController {
         // makeKeyAndOrderFront without NSApp.activate: the .nonactivatingPanel style takes
         // keyboard focus while the previous app stays active, so dismissal restores its focus
         panel.makeKeyAndOrderFront(nil)
+        installSwipeMonitor()
     }
 
     func hide() {
         appState.resetTransientState()
         panel?.orderOut(nil)
+        removeSwipeMonitor()
+    }
+
+    // A discrete 3-finger trackpad swipe (left/right only — the system reserves an
+    // up/down 3-finger swipe for Mission Control and never delivers it to an app) closes
+    // the overlay the same way Esc does, staged through any open sub-panel first.
+    private func installSwipeMonitor() {
+        guard swipeMonitor == nil else { return }
+        swipeMonitor = NSEvent.addLocalMonitorForEvents(matching: .swipe) { [weak self] event in
+            self?.appState.handleEscape()
+            return event
+        }
+    }
+
+    private func removeSwipeMonitor() {
+        if let swipeMonitor {
+            NSEvent.removeMonitor(swipeMonitor)
+        }
+        swipeMonitor = nil
     }
 
     private func ensurePanel() -> OverlayPanel {
