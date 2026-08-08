@@ -17,6 +17,19 @@ struct PromptCardView: View {
         if case .skill(let skill) = item { skill.files } else { [] }
     }
 
+    // Overflowing preview text fades out instead of being hard-clipped mid-word.
+    private var overflowFade: LinearGradient {
+        LinearGradient(
+            stops: [
+                .init(color: .black, location: 0),
+                .init(color: .black, location: 0.82),
+                .init(color: .clear, location: 1),
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             header
@@ -26,6 +39,7 @@ struct PromptCardView: View {
                 )
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .mask(overflowFade)
             .clipped()
             if !skillFiles.isEmpty { fileChips }
         }
