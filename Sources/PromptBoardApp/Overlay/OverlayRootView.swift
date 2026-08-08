@@ -67,6 +67,7 @@ struct OverlayRootView: View {
 
             trailingControls
         }
+        .padding(.horizontal, Constants.boardHorizontalPadding)
     }
 
     // The + menu and column toggle share one hit-testing surface that absorbs stray
