@@ -10,5 +10,6 @@ enum Constants {
     static let blurMaterial: NSVisualEffectView.Material = .fullScreenUI
     static let searchFieldPlaceholder = "Search prompts…"
     static let toolbarControlHeight: CGFloat = 44
+    static let boardHorizontalPadding: CGFloat = 40
     static let editorTitlePlaceholder = "Prompt title"
 }

@@ -4,7 +4,6 @@ import PromptBoardKit
 struct LibraryGridView: View {
     let appState: AppState
 
-    private let horizontalPadding = 40.0
     private let spacing = 16.0
 
     var body: some View {
@@ -37,7 +36,7 @@ struct LibraryGridView: View {
                     ExternalCardView(item: item, appState: appState)
                 }
             }
-            .padding(.horizontal, horizontalPadding)
+            .padding(.horizontal, Constants.boardHorizontalPadding)
             .padding(.top, 4)
             .padding(.bottom, 44)
         }
