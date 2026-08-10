@@ -173,4 +173,44 @@ struct FolderStructureTests {
             try repo.moveSkill(id: skill.id, toFolder: "Work")
         }
     }
+
+    @Test func addPromptWithAGroupPathCreatesItInThatSubfolder() throws {
+        let repo = tempLibrary()
+        let prompt = try repo.addPrompt(title: "Deploy", content: "b", group: "Work/Ops")
+
+        let expected = repo.promptsDirectoryURL.appendingPathComponent("Work/Ops/deploy.md").path
+        #expect(FileManager.default.fileExists(atPath: expected))
+        let loaded = try repo.load().items.first
+        #expect(loaded?.group == "Work/Ops")
+        #expect(loaded?.id == prompt.id)
+    }
+
+    @Test func movePromptToItsCurrentFolderIsANoOpNotADuplicate() throws {
+        let repo = tempLibrary()
+        let prompt = try repo.addPrompt(title: "Deploy", content: "b", group: "Work")
+        // Move it to the same folder it already lives in.
+        try repo.movePrompt(id: prompt.id, toFolder: "Work")
+
+        let items = try repo.load().items.filter { $0.id == prompt.id }
+        #expect(items.count == 1)
+        #expect(items.first?.group == "Work")
+        // No stray suffixed duplicate file.
+        #expect(!FileManager.default.fileExists(atPath: repo.promptsDirectoryURL.appendingPathComponent("Work/deploy-2.md").path))
+    }
+
+    @Test func moveSkillToItsCurrentFolderIsANoOpNotAConflict() throws {
+        let repo = tempLibrary()
+        let skill = try repo.createSkill(name: "Logo Export", description: "d", group: nil, body: "b")
+        try repo.moveSkill(id: skill.id, toFolder: "Work")
+        // Second move to the SAME folder must not throw.
+        try repo.moveSkill(id: skill.id, toFolder: "Work")
+
+        let reloaded = try repo.load().items.first { $0.id == skill.id }
+        #expect(reloaded?.group == "Work")
+        // Symlink still resolves to the skill in Work.
+        let source = repo.skillsDirectoryURL.appendingPathComponent("Work/logo-export").standardizedFileURL.path
+        for dir in repo.syncTargets.all {
+            #expect(SymlinkManager.resolvedDestination(of: dir.appendingPathComponent("logo-export"))?.path == source)
+        }
+    }
 }

@@ -28,7 +28,7 @@ struct LibraryRepositoryTests {
 
         let prompt = try repository.addPrompt(title: "Code Review", content: "Review the diff", group: "Coding")
 
-        let fileURL = promptsDir(directory).appendingPathComponent("code-review.md")
+        let fileURL = promptsDir(directory).appendingPathComponent("Coding/code-review.md")
         let text = try String(contentsOf: fileURL, encoding: .utf8)
         #expect(text.contains("title: Code Review"))
         #expect(!text.contains("group:"))
@@ -38,7 +38,7 @@ struct LibraryRepositoryTests {
         #expect(load.items.count == 1)
         #expect(load.items.first?.id == prompt.id)
         #expect(load.items.first?.title == "Code Review")
-        #expect(load.items.first?.group == nil)
+        #expect(load.items.first?.group == "Coding")
     }
 
     @Test func slugCollisionsGetDistinctFiles() throws {

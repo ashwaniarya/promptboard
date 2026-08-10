@@ -74,11 +74,12 @@ public struct LibraryRepository: Sendable {
     @discardableResult
     public func addPrompt(title: String, content: String, group: String? = nil) throws -> Prompt {
         try withExclusiveLock {
-            try ensureDirectory(promptsDirectoryURL)
+            let destDir = try folderURL(for: .prompt, path: group)
+            try ensureDirectory(destDir)
             let normalized = Self.normalizedTitle(title)
             let slug = Slug.unique(Slug.make(from: normalized), existing: existingPromptSlugs())
-            let prompt = Prompt(title: normalized, content: content, group: group)
-            try writePrompt(prompt, to: promptsDirectoryURL.appendingPathComponent("\(slug).md"))
+            let prompt = Prompt(title: normalized, content: content, group: nil)
+            try writePrompt(prompt, to: destDir.appendingPathComponent("\(slug).md"))
             return prompt
         }
     }

@@ -113,6 +113,9 @@ extension LibraryRepository {
                 throw LibraryRepositoryError.promptNotFound(id)
             }
             let destDir = try folderURL(for: .prompt, path: folder)
+            if found.url.deletingLastPathComponent().standardizedFileURL == destDir.standardizedFileURL {
+                return
+            }
             try ensureDirectory(destDir)
             let destination = uniqueDestination(for: found.url.lastPathComponent, in: destDir)
             do {
@@ -130,6 +133,9 @@ extension LibraryRepository {
             }
             let name = found.url.lastPathComponent
             let destDir = try folderURL(for: .skill, path: folder)
+            if found.url.deletingLastPathComponent().standardizedFileURL == destDir.standardizedFileURL {
+                return
+            }
             try ensureDirectory(destDir)
             let destination = destDir.appendingPathComponent(name)
             // A skill's leaf folder name IS its flat symlink identity / slash-command
