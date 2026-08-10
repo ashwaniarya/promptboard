@@ -241,8 +241,26 @@ struct FolderStructureTests {
         #expect(didRun)
         #expect(FileManager.default.fileExists(atPath: repo.promptsDirectoryURL.appendingPathComponent("Work/grouped.md").path))
         #expect(FileManager.default.fileExists(atPath: repo.promptsDirectoryURL.appendingPathComponent("loose.md").path))
+        // The marker file is written so the migration is recorded as done.
+        #expect(FileManager.default.fileExists(atPath: repo.libraryURL.appendingPathComponent(".promptboard-folders-v1").path))
         // Idempotent: a second run is a no-op.
         #expect(try repo.migrateGroupsToFoldersIfNeeded() == false)
+    }
+
+    @Test func migrationLeavesAnAlreadyNestedItemAloneEvenWithAStaleSidecarGroup() throws {
+        let repo = tempLibrary()
+        // A skill already living in folder A, but whose sidecar still says group B.
+        let skill = try repo.createSkill(name: "Logo Export", description: "d", group: nil, body: "b")
+        try repo.moveSkill(id: skill.id, toFolder: "A")
+        let nested = repo.skillsDirectoryURL.appendingPathComponent("A/logo-export", isDirectory: true)
+        try "{\"id\":\"\(skill.id.uuidString)\",\"group\":\"B\",\"createdAt\":\"2020-01-01T00:00:00.000Z\",\"updatedAt\":\"2020-01-01T00:00:00.000Z\"}"
+            .write(to: nested.appendingPathComponent(".promptboard.json"), atomically: true, encoding: .utf8)
+
+        _ = try repo.migrateGroupsToFoldersIfNeeded()
+
+        // The stale sidecar group must NOT drag it into B — location wins.
+        #expect(FileManager.default.fileExists(atPath: nested.appendingPathComponent("SKILL.md").path))
+        #expect(!FileManager.default.fileExists(atPath: repo.skillsDirectoryURL.appendingPathComponent("B/logo-export").path))
     }
 
     @Test func migrationMovesAGroupedSkillIntoItsFolderAndRepointsTheSymlink() throws {

@@ -197,7 +197,11 @@ extension LibraryRepository {
                 }
                 try ensureDirectory(destDir)
                 let destination = uniqueDestination(for: url.lastPathComponent, in: destDir)
-                try? FileManager.default.moveItem(at: url, to: destination)
+                do {
+                    try FileManager.default.moveItem(at: url, to: destination)
+                } catch {
+                    logWarning("folder migration: could not move \"\(url.lastPathComponent)\": \(error)")
+                }
             }
             for folderURL in skillFolderURLs() {
                 guard let group = readSidecar(in: folderURL)?.group, !group.isEmpty else { continue }
@@ -211,8 +215,15 @@ extension LibraryRepository {
                 let destination = destDir.appendingPathComponent(name)
                 guard !FileManager.default.fileExists(atPath: destination.path) else { continue }
                 SymlinkManager.unlink(name: name, from: syncTargets.all, expectedTarget: folderURL)
-                try? FileManager.default.moveItem(at: folderURL, to: destination)
-                linkSkill(at: destination, name: name)
+                do {
+                    try FileManager.default.moveItem(at: folderURL, to: destination)
+                    linkSkill(at: destination, name: name)
+                } catch {
+                    // Move failed — restore the original link rather than leaving a
+                    // dangling one; the item stays at root and migrates on no later run.
+                    logWarning("folder migration: could not move skill \"\(name)\": \(error)")
+                    linkSkill(at: folderURL, name: name)
+                }
             }
 
             try Data("v1".utf8).write(to: folderMigrationMarkerURL, options: .atomic)
@@ -225,8 +236,11 @@ extension LibraryRepository {
     // and avoids re-visiting already-migrated files under new subfolders.
     private func promptFileURLsForMigration() -> [URL] {
         let entries = (try? FileManager.default.contentsOfDirectory(
-            at: promptsDirectoryURL, includingPropertiesForKeys: nil
+            at: promptsDirectoryURL, includingPropertiesForKeys: [.isRegularFileKey]
         )) ?? []
-        return entries.filter { $0.pathExtension == "md" }
+        return entries.filter {
+            $0.pathExtension == "md"
+                && (try? $0.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true
+        }
     }
 }
