@@ -135,6 +135,6 @@ struct SkillRepositoryTests {
         #expect(moved.id == skill.id)
 
         let reloaded = try repository.load().items.first { $0.kind == .skill }
-        #expect(reloaded?.group == "Research")
+        #expect(reloaded?.group == nil)
     }
 }

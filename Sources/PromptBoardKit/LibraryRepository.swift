@@ -51,14 +51,16 @@ public struct LibraryRepository: Sendable {
         var items: [LibraryEntry] = []
         var skipped: [String] = []
         for url in promptFileURLs() {
-            if let prompt = readPrompt(at: url) {
+            if var prompt = readPrompt(at: url) {
+                prompt.group = Self.folderPath(of: url, underRoot: promptsDirectoryURL)
                 items.append(.prompt(prompt))
             } else {
                 skipped.append(url.path)
             }
         }
         for folderURL in skillFolderURLs() {
-            if let skill = readSkill(at: folderURL) {
+            if var skill = readSkill(at: folderURL) {
+                skill.group = Self.folderPath(of: folderURL, underRoot: skillsDirectoryURL)
                 items.append(.skill(skill))
             } else {
                 skipped.append(folderURL.path)
@@ -191,12 +193,31 @@ public struct LibraryRepository: Sendable {
     }
 
     private func promptFileURLs() -> [URL] {
-        guard let entries = try? FileManager.default.contentsOfDirectory(
-            at: promptsDirectoryURL, includingPropertiesForKeys: nil
+        collectFiles(under: promptsDirectoryURL) { $0.pathExtension == "md" }
+    }
+
+    // Recursive walk collecting regular files that pass `include`. Skips dot-entries.
+    private func collectFiles(under root: URL, include: (URL) -> Bool) -> [URL] {
+        guard let enumerator = FileManager.default.enumerator(
+            at: root, includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
         ) else { return [] }
-        return entries
-            .filter { $0.pathExtension == "md" }
-            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        var urls: [URL] = []
+        for case let url as URL in enumerator {
+            guard (try? url.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true,
+                  include(url) else { continue }
+            urls.append(url)
+        }
+        return urls.sorted { $0.path < $1.path }
+    }
+
+    // The `/`-separated folder path of an item relative to its tree root, or nil at root.
+    static func folderPath(of itemURL: URL, underRoot root: URL) -> String? {
+        let base = root.standardizedFileURL.path
+        let parent = itemURL.deletingLastPathComponent().standardizedFileURL.path
+        guard parent == base || parent.hasPrefix(base + "/") else { return nil }
+        if parent == base { return nil }
+        return String(parent.dropFirst(base.count + 1))
     }
 
     private func existingPromptSlugs() -> Set<String> {
@@ -222,22 +243,19 @@ public struct LibraryRepository: Sendable {
             id: id,
             title: doc.fields["title"] ?? "Untitled",
             content: doc.body,
-            group: doc.fields["group"],
+            group: nil,
             createdAt: created,
             updatedAt: updated
         )
     }
 
     private func writePrompt(_ prompt: Prompt, to url: URL) throws {
-        var fields: [(String, String)] = [
+        let fields: [(String, String)] = [
             ("id", prompt.id.uuidString),
             ("title", prompt.title),
+            ("createdAt", CanonicalJSON.isoString(from: prompt.createdAt)),
+            ("updatedAt", CanonicalJSON.isoString(from: prompt.updatedAt)),
         ]
-        if let group = prompt.group {
-            fields.append(("group", group))
-        }
-        fields.append(("createdAt", CanonicalJSON.isoString(from: prompt.createdAt)))
-        fields.append(("updatedAt", CanonicalJSON.isoString(from: prompt.updatedAt)))
         let text = Frontmatter.render(fields: fields, body: prompt.content)
         do {
             try Data(text.utf8).write(to: url, options: .atomic)
@@ -372,13 +390,27 @@ extension LibraryRepository {
         skillsDirectoryURL.appendingPathComponent(name)
     }
 
+    // A skill folder is any directory that DIRECTLY contains SKILL.md. We record it
+    // and do not descend (its subdirs are supporting files, not nested skills).
     func skillFolderURLs() -> [URL] {
-        guard let entries = try? FileManager.default.contentsOfDirectory(
-            at: skillsDirectoryURL, includingPropertiesForKeys: [.isDirectoryKey]
-        ) else { return [] }
-        return entries
-            .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true }
-            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        var results: [URL] = []
+        func walk(_ dir: URL) {
+            guard let entries = try? FileManager.default.contentsOfDirectory(
+                at: dir, includingPropertiesForKeys: [.isDirectoryKey]
+            ) else { return }
+            for entry in entries.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
+                guard !entry.lastPathComponent.hasPrefix("."),
+                      (try? entry.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true
+                else { continue }
+                if FileManager.default.fileExists(atPath: entry.appendingPathComponent("SKILL.md").path) {
+                    results.append(entry)
+                } else {
+                    walk(entry)
+                }
+            }
+        }
+        walk(skillsDirectoryURL)
+        return results.sorted { $0.path < $1.path }
     }
 
     func existingSkillFolderNames() -> Set<String> {

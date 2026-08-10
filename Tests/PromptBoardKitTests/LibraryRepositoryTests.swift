@@ -31,14 +31,14 @@ struct LibraryRepositoryTests {
         let fileURL = promptsDir(directory).appendingPathComponent("code-review.md")
         let text = try String(contentsOf: fileURL, encoding: .utf8)
         #expect(text.contains("title: Code Review"))
-        #expect(text.contains("group: Coding"))
+        #expect(!text.contains("group:"))
         #expect(text.contains("Review the diff"))
 
         let load = try repository.load()
         #expect(load.items.count == 1)
         #expect(load.items.first?.id == prompt.id)
         #expect(load.items.first?.title == "Code Review")
-        #expect(load.items.first?.group == "Coding")
+        #expect(load.items.first?.group == nil)
     }
 
     @Test func slugCollisionsGetDistinctFiles() throws {
