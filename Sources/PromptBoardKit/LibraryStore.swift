@@ -190,7 +190,7 @@ public final class LibraryStore {
     // MARK: - Folders
 
     // On-disk organizational folders (incl. empty ones), unioned into the sidebar tree.
-    public var folderPaths: [String] { repository.folderPaths() }
+    public private(set) var folderPaths: [String] = []
 
     @discardableResult
     public func createFolder(kind: LibraryEntry.Kind, path: String) -> Bool {
@@ -241,6 +241,7 @@ public final class LibraryStore {
         let signature = Self.signature(of: load.items)
         guard signature != lastSignature else { return }
         items = load.items
+        folderPaths = repository.folderPaths()
         lastSignature = signature
         // A prompt added by the CLI or MCP while the app runs reaches us only here;
         // without this, it would not sync until the next in-app action.
@@ -274,6 +275,7 @@ public final class LibraryStore {
     private func refreshFromDisk() {
         let load = (try? repository.load()) ?? LibraryRepository.Load(items: [], skippedPaths: [])
         items = load.items
+        folderPaths = repository.folderPaths()
         lastSignature = Self.signature(of: load.items)
         reconcileSync()
     }

@@ -52,6 +52,7 @@ final class AppState {
     @ObservationIgnored var requestHide: () -> Void = {}
     @ObservationIgnored var requestFocusEditorTitle: () -> Void = {}
     @ObservationIgnored var requestFocusSearchField: () -> Void = {}
+    @ObservationIgnored var requestFocusNewFolder: () -> Void = {}
 
     init(store: LibraryStore) {
         self.store = store

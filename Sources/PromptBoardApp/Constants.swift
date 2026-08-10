@@ -12,4 +12,5 @@ enum Constants {
     static let toolbarControlHeight: CGFloat = 44
     static let boardHorizontalPadding: CGFloat = 40
     static let editorTitlePlaceholder = "Prompt title"
+    static let newFolderPlaceholder = "New folder"
 }

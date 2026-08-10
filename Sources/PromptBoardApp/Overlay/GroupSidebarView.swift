@@ -34,7 +34,7 @@ struct GroupSidebarView: View {
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(.tertiary)
                 Spacer()
-                Button { addingFolder = true } label: {
+                Button { addingFolder = true; appState.requestFocusNewFolder() } label: {
                     Image(systemName: "folder.badge.plus").font(.system(size: 11))
                 }
                 .buttonStyle(.plain).foregroundStyle(.secondary)
@@ -60,6 +60,10 @@ struct GroupSidebarView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color.black.opacity(0.18))
         .overlay(alignment: .trailing) { Rectangle().fill(.white.opacity(0.06)).frame(width: 1) }
+        .onChange(of: appState.overlaySession) {
+            addingFolder = false
+            newFolderName = ""
+        }
     }
 
     private var allRow: some View {
@@ -117,7 +121,7 @@ struct GroupSidebarView: View {
     }
 
     private var newFolderField: some View {
-        TextField("New folder", text: $newFolderName)
+        TextField(Constants.newFolderPlaceholder, text: $newFolderName)
             .textFieldStyle(.plain).font(.system(size: 12))
             .padding(.horizontal, 11).padding(.vertical, 4)
             .onSubmit {
