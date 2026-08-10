@@ -24,6 +24,38 @@ extension LibraryRepository {
         return root.appendingPathComponent(path, isDirectory: true)
     }
 
+    // All organizational folder paths (relative, `/`-separated) across BOTH trees, deduped
+    // and sorted. A skills-tree directory that directly holds SKILL.md is a skill (an item),
+    // not a folder — it's excluded and not descended into. Feeds FolderNode.build so an
+    // empty folder still shows in the sidebar.
+    public func folderPaths() -> [String] {
+        var paths = Set<String>()
+        collectFolderPaths(under: promptsDirectoryURL, root: promptsDirectoryURL, stopAtSkillLeaf: false, into: &paths)
+        collectFolderPaths(under: skillsDirectoryURL, root: skillsDirectoryURL, stopAtSkillLeaf: true, into: &paths)
+        return paths.sorted()
+    }
+
+    private func collectFolderPaths(under dir: URL, root: URL, stopAtSkillLeaf: Bool, into paths: inout Set<String>) {
+        guard let entries = try? FileManager.default.contentsOfDirectory(
+            at: dir, includingPropertiesForKeys: [.isDirectoryKey]
+        ) else { return }
+        for entry in entries {
+            guard !entry.lastPathComponent.hasPrefix("."),
+                  (try? entry.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true
+            else { continue }
+            if stopAtSkillLeaf,
+               FileManager.default.fileExists(atPath: entry.appendingPathComponent("SKILL.md").path) {
+                continue // a skill, not a folder — and don't descend into it
+            }
+            // folderPath returns the PARENT's relative path, so append a dummy child to
+            // get entry's own relative path back out of the same helper.
+            if let relative = Self.folderPath(of: entry.appendingPathComponent("x"), underRoot: root) {
+                paths.insert(relative)
+            }
+            collectFolderPaths(under: entry, root: root, stopAtSkillLeaf: stopAtSkillLeaf, into: &paths)
+        }
+    }
+
     public func createFolder(kind: LibraryEntry.Kind, path: String) throws {
         try withExclusiveLock {
             let url = try folderURL(for: kind, path: path)

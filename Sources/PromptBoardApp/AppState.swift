@@ -75,7 +75,7 @@ final class AppState {
     }
 
     var folderTree: [FolderNode] {
-        FolderNode.build(from: store.items)
+        FolderNode.build(from: store.items, extraFolderPaths: store.folderPaths)
     }
 
     func beginNewOverlaySession() {

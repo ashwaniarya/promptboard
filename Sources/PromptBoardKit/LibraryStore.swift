@@ -189,6 +189,9 @@ public final class LibraryStore {
 
     // MARK: - Folders
 
+    // On-disk organizational folders (incl. empty ones), unioned into the sidebar tree.
+    public var folderPaths: [String] { repository.folderPaths() }
+
     @discardableResult
     public func createFolder(kind: LibraryEntry.Kind, path: String) -> Bool {
         do { try repository.createFolder(kind: kind, path: path); refreshFromDisk(); return true }

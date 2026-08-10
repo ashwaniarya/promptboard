@@ -63,6 +63,7 @@ struct PromptCardView: View {
         .onHover { hovering in
             withAnimation(.easeOut(duration: 0.12)) { isHovering = hovering }
         }
+        .draggable(item.id.uuidString)
     }
 
     private var header: some View {

@@ -358,4 +358,20 @@ struct FolderStructureTests {
         #expect(work?.children.first?.directCount == 0)
         #expect(roots.contains { $0.path == "Personal" && $0.directCount == 0 })
     }
+
+    @Test func folderPathsListsOrganizationalDirsAcrossBothTreesDedupedExcludingSkillLeaves() throws {
+        let repo = tempLibrary()
+        try repo.ensureLibraryDirectories()
+        // prompts/Work/ and prompts/Personal/ are organizational folders.
+        try FileManager.default.createDirectory(at: repo.promptsDirectoryURL.appendingPathComponent("Work/ClientA"), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: repo.promptsDirectoryURL.appendingPathComponent("Personal"), withIntermediateDirectories: true)
+        // skills/Work/logo-export/ is a SKILL (has SKILL.md) — "Work" is a folder, the skill is not.
+        let skill = repo.skillsDirectoryURL.appendingPathComponent("Work/logo-export")
+        try FileManager.default.createDirectory(at: skill, withIntermediateDirectories: true)
+        try "---\nname: logo-export\ndescription: d\n---\n".write(to: skill.appendingPathComponent("SKILL.md"), atomically: true, encoding: .utf8)
+
+        let paths = repo.folderPaths()
+
+        #expect(paths == ["Personal", "Work", "Work/ClientA"])
+    }
 }
