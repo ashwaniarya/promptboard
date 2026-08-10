@@ -321,6 +321,8 @@ extension LibraryRepository {
                 throw LibraryRepositoryError.ioFailure(underlying: error)
             }
             let now = Date()
+            // Legacy exception: this sidecar `group` is read only by the one-time F4
+            // migration; group is otherwise location-derived. Folder-aware import is a later task.
             try writeSidecar(SkillSidecar(id: UUID(), group: group, createdAt: now, updatedAt: now), in: destination)
             let outcomes = SymlinkManager.link(source: destination, into: syncTargets.all, name: folderName)
             for (directory, outcome) in zip(syncTargets.all, outcomes) where outcome.conflicted {
@@ -333,6 +335,11 @@ extension LibraryRepository {
         }
     }
 
+    /// Group is now derived from an item's folder location, so this method no longer
+    /// changes a skill's grouping on reload (it always writes `group: nil` to the
+    /// sidecar). To change a skill's folder use `moveSkill(id:toFolder:)`. This method
+    /// is retained only for CLI/MCP source compatibility and will be rewired or removed
+    /// in a later task.
     @discardableResult
     public func updateSkillGroup(id: UUID, group: String?) throws -> Skill {
         try withExclusiveLock {

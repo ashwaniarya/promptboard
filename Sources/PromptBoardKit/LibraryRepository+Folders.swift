@@ -132,6 +132,8 @@ extension LibraryRepository {
             let destDir = try folderURL(for: .skill, path: folder)
             try ensureDirectory(destDir)
             let destination = destDir.appendingPathComponent(name)
+            // A skill's leaf folder name IS its flat symlink identity / slash-command
+            // name — never auto-suffix it (unlike a prompt file); refuse the collision.
             guard !FileManager.default.fileExists(atPath: destination.path) else {
                 throw LibraryRepositoryError.skillLinkConflict(name: name, path: destination.path)
             }

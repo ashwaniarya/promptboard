@@ -142,4 +142,35 @@ struct FolderStructureTests {
             #expect(SymlinkManager.resolvedDestination(of: link)?.path == source)
         }
     }
+
+    @Test func movePromptRelocatesItsFileAndItsFolderReadsBackFromLocation() throws {
+        let repo = tempLibrary()
+        let prompt = try repo.addPrompt(title: "Deploy Notes", content: "b")
+        try repo.movePrompt(id: prompt.id, toFolder: "Work/Ops")
+
+        let moved = repo.promptsDirectoryURL.appendingPathComponent("Work/Ops/deploy-notes.md").path
+        #expect(FileManager.default.fileExists(atPath: moved))
+        let reloaded = try repo.load().items.first { $0.id == prompt.id }
+        #expect(reloaded?.group == "Work/Ops")
+    }
+
+    @Test func moveSkillMakesItsGroupReadBackAsTheNewFolder() throws {
+        let repo = tempLibrary()
+        let skill = try repo.createSkill(name: "Logo Export", description: "d", group: nil, body: "b")
+        try repo.moveSkill(id: skill.id, toFolder: "Work")
+
+        let reloaded = try repo.load().items.first { $0.id == skill.id }
+        #expect(reloaded?.group == "Work")
+    }
+
+    @Test func moveSkillRefusesWhenAnEntryAlreadyOccupiesTheDestination() throws {
+        let repo = tempLibrary()
+        let skill = try repo.createSkill(name: "Logo Export", description: "d", group: nil, body: "b")
+        // Pre-create a colliding entry at skills/Work/logo-export.
+        let clash = repo.skillsDirectoryURL.appendingPathComponent("Work/logo-export", isDirectory: true)
+        try FileManager.default.createDirectory(at: clash, withIntermediateDirectories: true)
+        #expect(throws: LibraryRepositoryError.self) {
+            try repo.moveSkill(id: skill.id, toFolder: "Work")
+        }
+    }
 }
