@@ -398,7 +398,7 @@ extension LibraryRepository {
             guard let entries = try? FileManager.default.contentsOfDirectory(
                 at: dir, includingPropertiesForKeys: [.isDirectoryKey]
             ) else { return }
-            for entry in entries.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
+            for entry in entries {
                 guard !entry.lastPathComponent.hasPrefix("."),
                       (try? entry.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true
                 else { continue }
