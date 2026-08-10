@@ -172,8 +172,9 @@ final class AppState {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         let path = parent.map { "\($0)/\(trimmed)" } ?? trimmed
-        // Prompts and skills share the sidebar folder namespace; create in both trees so
-        // an empty folder shows regardless of what later gets dropped into it.
+        // Prompts and skills share one sidebar folder namespace, so create the directory in
+        // both trees. The sidebar surfaces the now-empty folder via the store's on-disk
+        // folder enumeration (LibraryStore.folderPaths), unioned into FolderNode.build.
         _ = store.createFolder(kind: .prompt, path: path)
         _ = store.createFolder(kind: .skill, path: path)
     }

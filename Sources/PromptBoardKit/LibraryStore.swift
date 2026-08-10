@@ -214,7 +214,9 @@ public final class LibraryStore {
         catch LibraryRepositoryError.promptNotFound {
         } catch { reportFailure(error); return false }
         do { try repository.moveSkill(id: id, toFolder: folder); refreshFromDisk(); return true }
-        catch { reportFailure(error); return false }
+        catch LibraryRepositoryError.skillNotFound {
+            return false
+        } catch { reportFailure(error); return false }
     }
 
     // MARK: - Live reload

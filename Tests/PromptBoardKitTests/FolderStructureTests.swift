@@ -315,4 +315,47 @@ struct FolderStructureTests {
         #expect(work?.children.first?.name == "ClientA")
         #expect(work?.children.first?.path == "Work/ClientA")
     }
+
+    @Test func folderNodesMaterializePureAncestorsWithZeroDirectCount() {
+        // A single deep item: A and A/B are pure ancestors (no direct items), A/B/C holds it.
+        let roots = FolderNode.build(from: [.prompt(Prompt(title: "x", content: "", group: "A/B/C"))])
+
+        #expect(roots.count == 1)
+        let a = roots.first
+        #expect(a?.path == "A")
+        #expect(a?.directCount == 0)
+        #expect(a?.subtreeCount == 1)
+        let b = a?.children.first
+        #expect(b?.path == "A/B")
+        #expect(b?.directCount == 0)
+        #expect(b?.subtreeCount == 1)
+        let c = b?.children.first
+        #expect(c?.path == "A/B/C")
+        #expect(c?.directCount == 1)
+        #expect(c?.subtreeCount == 1)
+    }
+
+    @Test func folderNodesKeepSiblingsWithASharedPrefixSeparate() {
+        // "A/B" must not swallow "A/BC" as a child — the slash boundary guards it.
+        let roots = FolderNode.build(from: [
+            .prompt(Prompt(title: "x", content: "", group: "A/B")),
+            .prompt(Prompt(title: "y", content: "", group: "A/BC")),
+        ])
+        let a = roots.first { $0.path == "A" }
+        #expect(a?.children.map(\.name).sorted() == ["B", "BC"])
+        #expect(a?.subtreeCount == 2)
+    }
+
+    @Test func folderNodesIncludeEmptyOnDiskFoldersFromExtraPaths() {
+        // An on-disk folder with no items still appears (directCount 0) so a freshly
+        // created empty folder is visible in the sidebar.
+        let roots = FolderNode.build(
+            from: [.prompt(Prompt(title: "x", content: "", group: "Work"))],
+            extraFolderPaths: ["Work/Empty", "Personal"]
+        )
+        let work = roots.first { $0.path == "Work" }
+        #expect(work?.children.first?.path == "Work/Empty")
+        #expect(work?.children.first?.directCount == 0)
+        #expect(roots.contains { $0.path == "Personal" && $0.directCount == 0 })
+    }
 }
