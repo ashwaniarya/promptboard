@@ -14,8 +14,9 @@ struct GroupSidebarView: View {
                 .padding(.bottom, 6)
 
             row(title: "All", systemImage: "square.stack.3d.up.fill", group: nil, count: appState.store.items.count)
-            ForEach(appState.groupCounts, id: \.name) { group in
-                row(title: group.name, systemImage: "folder.fill", group: group.name, count: group.count)
+            // F6: replace with an expandable tree + drag-and-drop
+            ForEach(appState.folderTree) { node in
+                row(title: node.name, systemImage: "folder.fill", group: node.path, count: node.subtreeCount)
             }
 
             Spacer(minLength: 0)
@@ -37,9 +38,9 @@ struct GroupSidebarView: View {
     }
 
     private func row(title: String, systemImage: String, group: String?, count: Int) -> some View {
-        let selected = appState.selectedGroup == group
+        let selected = appState.selectedFolder == group
         return Button {
-            appState.selectedGroup = group
+            appState.selectedFolder = group
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: systemImage)

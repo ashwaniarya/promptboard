@@ -187,6 +187,37 @@ public final class LibraryStore {
         }
     }
 
+    // MARK: - Folders
+
+    @discardableResult
+    public func createFolder(kind: LibraryEntry.Kind, path: String) -> Bool {
+        do { try repository.createFolder(kind: kind, path: path); refreshFromDisk(); return true }
+        catch { reportFailure(error); return false }
+    }
+
+    @discardableResult
+    public func renameFolder(kind: LibraryEntry.Kind, from: String, to: String) -> Bool {
+        do { try repository.renameFolder(kind: kind, from: from, to: to); refreshFromDisk(); return true }
+        catch { reportFailure(error); return false }
+    }
+
+    @discardableResult
+    public func deleteFolder(kind: LibraryEntry.Kind, path: String) -> Bool {
+        do { try repository.deleteFolder(kind: kind, path: path); refreshFromDisk(); return true }
+        catch { reportFailure(error); return false }
+    }
+
+    // Routes by id: move a prompt if one matches, else a skill.
+    @discardableResult
+    public func moveItem(id: UUID, toFolder folder: String?) -> Bool {
+        do { try repository.movePrompt(id: id, toFolder: folder); refreshFromDisk(); return true }
+        catch LibraryRepositoryError.promptNotFound {
+        } catch { reportFailure(error); return false }
+        do { try repository.moveSkill(id: id, toFolder: folder); refreshFromDisk(); return true }
+        catch { reportFailure(error); return false }
+        return false
+    }
+
     // MARK: - Live reload
 
     public func startWatchingForExternalChanges() {

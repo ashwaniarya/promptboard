@@ -18,7 +18,7 @@ final class AppState {
     let store: LibraryStore
     var searchText = ""
     var columnCount = 3
-    var selectedGroup: String?
+    var selectedFolder: String?
     private(set) var overlaySession = 0
 
     // SwiftUI @FocusState writes are ignored while the app is inactive — and a
@@ -59,8 +59,10 @@ final class AppState {
 
     var visibleItems: [LibraryEntry] {
         var items = store.items
-        if let selectedGroup {
-            items = items.filter { $0.group == selectedGroup }
+        if let selectedFolder {
+            items = items.filter {
+                $0.group == selectedFolder || ($0.group?.hasPrefix(selectedFolder + "/") ?? false)
+            }
         }
         return PromptFilter.filter(items, query: searchText)
             .sorted { $0.updatedAt > $1.updatedAt }
@@ -72,12 +74,8 @@ final class AppState {
         showExternalItems ? PromptFilter.filter(store.externalItems, query: searchText) : []
     }
 
-    var groupCounts: [(name: String, count: Int)] {
-        var counts: [String: Int] = [:]
-        for item in store.items {
-            if let group = item.group { counts[group, default: 0] += 1 }
-        }
-        return counts.map { (name: $0.key, count: $0.value) }.sorted { $0.name < $1.name }
+    var folderTree: [FolderNode] {
+        FolderNode.build(from: store.items)
     }
 
     func beginNewOverlaySession() {
@@ -168,6 +166,20 @@ final class AppState {
         if case .edit(let editingPrompt) = editorMode, editingPrompt.id == id {
             editorMode = nil
         }
+    }
+
+    func createFolder(named name: String, under parent: String?) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let path = parent.map { "\($0)/\(trimmed)" } ?? trimmed
+        // Prompts and skills share the sidebar folder namespace; create in both trees so
+        // an empty folder shows regardless of what later gets dropped into it.
+        _ = store.createFolder(kind: .prompt, path: path)
+        _ = store.createFolder(kind: .skill, path: path)
+    }
+
+    func moveItem(id: UUID, toFolder folder: String?) {
+        _ = store.moveItem(id: id, toFolder: folder)
     }
 
     func beginCreatingSkill() {

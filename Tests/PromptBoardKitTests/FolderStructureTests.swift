@@ -300,4 +300,19 @@ struct FolderStructureTests {
         // Migration completed (marker written) — a second run is a no-op.
         #expect(try repo.migrateGroupsToFoldersIfNeeded() == false)
     }
+
+    @Test func folderNodesNestByPathWithSubtreeCounts() {
+        let items: [LibraryEntry] = [
+            .prompt(Prompt(title: "a", content: "", group: "Work")),
+            .prompt(Prompt(title: "b", content: "", group: "Work/ClientA")),
+            .prompt(Prompt(title: "c", content: "", group: nil)),
+        ]
+        let roots = FolderNode.build(from: items)
+        let work = roots.first { $0.name == "Work" }
+        #expect(work != nil)
+        #expect(work?.path == "Work")
+        #expect(work?.subtreeCount == 2)
+        #expect(work?.children.first?.name == "ClientA")
+        #expect(work?.children.first?.path == "Work/ClientA")
+    }
 }
