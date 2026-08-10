@@ -261,4 +261,25 @@ struct FolderStructureTests {
             #expect(SymlinkManager.resolvedDestination(of: dir.appendingPathComponent("logo-export"))?.path == movedSource)
         }
     }
+
+    @Test func migrationSkipsAnItemWithAMalformedGroupAndStillCompletes() throws {
+        let repo = tempLibrary()
+        try repo.ensureLibraryDirectories()
+        // A legacy prompt whose group label is not a valid folder path.
+        try "---\nid: \(UUID().uuidString)\ntitle: Bad\ngroup: /misc\n---\nb"
+            .write(to: repo.promptsDirectoryURL.appendingPathComponent("bad.md"), atomically: true, encoding: .utf8)
+        // A well-formed grouped prompt that must still migrate.
+        try "---\nid: \(UUID().uuidString)\ntitle: Good\ngroup: Work\n---\nb"
+            .write(to: repo.promptsDirectoryURL.appendingPathComponent("good.md"), atomically: true, encoding: .utf8)
+
+        let didRun = try repo.migrateGroupsToFoldersIfNeeded()
+
+        #expect(didRun)
+        // The bad item stays at the root, ungrouped.
+        #expect(FileManager.default.fileExists(atPath: repo.promptsDirectoryURL.appendingPathComponent("bad.md").path))
+        // The good item migrated into its folder.
+        #expect(FileManager.default.fileExists(atPath: repo.promptsDirectoryURL.appendingPathComponent("Work/good.md").path))
+        // Migration completed (marker written) — a second run is a no-op.
+        #expect(try repo.migrateGroupsToFoldersIfNeeded() == false)
+    }
 }

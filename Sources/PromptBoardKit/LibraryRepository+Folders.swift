@@ -191,7 +191,10 @@ extension LibraryRepository {
                 guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
                 guard let group = Frontmatter.parse(text).fields["group"], !group.isEmpty else { continue }
                 guard Self.folderPath(of: url, underRoot: promptsDirectoryURL) == nil else { continue }
-                let destDir = try folderURL(for: .prompt, path: group)
+                guard let destDir = try? folderURL(for: .prompt, path: group) else {
+                    logWarning("folder migration: skipping \"\(url.lastPathComponent)\" — invalid legacy group \"\(group)\"")
+                    continue
+                }
                 try ensureDirectory(destDir)
                 let destination = uniqueDestination(for: url.lastPathComponent, in: destDir)
                 try? FileManager.default.moveItem(at: url, to: destination)
@@ -200,7 +203,10 @@ extension LibraryRepository {
                 guard let group = readSidecar(in: folderURL)?.group, !group.isEmpty else { continue }
                 guard Self.folderPath(of: folderURL, underRoot: skillsDirectoryURL) == nil else { continue }
                 let name = folderURL.lastPathComponent
-                let destDir = try self.folderURL(for: .skill, path: group)
+                guard let destDir = try? self.folderURL(for: .skill, path: group) else {
+                    logWarning("folder migration: skipping skill \"\(name)\" — invalid legacy group \"\(group)\"")
+                    continue
+                }
                 try ensureDirectory(destDir)
                 let destination = destDir.appendingPathComponent(name)
                 guard !FileManager.default.fileExists(atPath: destination.path) else { continue }
