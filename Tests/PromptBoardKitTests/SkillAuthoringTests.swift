@@ -27,7 +27,8 @@ struct SkillAuthoringTests {
 
         #expect(skill.name == "deploy-runbook")
         #expect(skill.description == "Steps to deploy")
-        #expect(skill.group == "Ops")
+        // Group is location-derived now; a skill authored at the skills root has group nil.
+        #expect(skill.group == nil)
         #expect(skill.body == "# Deploy")
 
         let folder = directory.appendingPathComponent("Library/skills/deploy-runbook")
@@ -85,7 +86,8 @@ struct SkillAuthoringTests {
         #expect(updated.id == skill.id)
         #expect(updated.name == "notes")
         #expect(updated.description == "new desc")
-        #expect(updated.group == "G")
+        // Group is location-derived now; updating a skill at the skills root leaves group nil.
+        #expect(updated.group == nil)
         #expect(updated.body == "# New")
     }
 

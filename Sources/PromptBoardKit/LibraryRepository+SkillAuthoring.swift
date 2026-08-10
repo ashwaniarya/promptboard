@@ -13,7 +13,7 @@ extension LibraryRepository {
             try ensureDirectory(destination)
             try writeSkillMarkdown(name: folderName, description: description, body: body, in: destination)
             let now = Date()
-            try writeSidecar(SkillSidecar(id: UUID(), group: group, createdAt: now, updatedAt: now), in: destination)
+            try writeSidecar(SkillSidecar(id: UUID(), group: nil, createdAt: now, updatedAt: now), in: destination)
             linkSkill(at: destination, name: folderName)
             guard let skill = readSkill(at: destination) else {
                 throw LibraryRepositoryError.invalidSkillSource(path: destination.path)
@@ -38,7 +38,7 @@ extension LibraryRepository {
             try ensureDirectory(destination)
             try writeSkillMarkdown(name: folderName, description: description, body: found.prompt.content, in: destination)
             let now = Date()
-            try writeSidecar(SkillSidecar(id: UUID(), group: group, createdAt: now, updatedAt: now), in: destination)
+            try writeSidecar(SkillSidecar(id: UUID(), group: nil, createdAt: now, updatedAt: now), in: destination)
             linkSkill(at: destination, name: folderName)
             if removingPrompt {
                 do {
@@ -76,7 +76,7 @@ extension LibraryRepository {
             let existing = readSidecar(in: folderURL)
             try writeSidecar(SkillSidecar(
                 id: found.skill.id,
-                group: group,
+                group: nil,
                 createdAt: existing?.createdAt ?? found.skill.createdAt,
                 updatedAt: Date()
             ), in: folderURL)
@@ -183,7 +183,7 @@ extension LibraryRepository {
         let existing = readSidecar(in: folderURL)
         try writeSidecar(SkillSidecar(
             id: skill.id,
-            group: existing?.group ?? skill.group,
+            group: nil,
             createdAt: existing?.createdAt ?? skill.createdAt,
             updatedAt: Date()
         ), in: folderURL)

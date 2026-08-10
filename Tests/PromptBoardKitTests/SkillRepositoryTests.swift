@@ -47,7 +47,8 @@ struct SkillRepositoryTests {
         let skill = try repository.importSkill(fromDirectory: source, group: "Tools")
 
         #expect(skill.name == "demo-skill")
-        #expect(skill.group == "Tools")
+        // Group is location-derived now; a skill imported to the skills root has group nil.
+        #expect(skill.group == nil)
         #expect(skill.files.map(\.relativePath) == ["reference.md"])
 
         let skillFolder = directory.appendingPathComponent("Library/skills/demo-skill")
@@ -119,7 +120,7 @@ struct SkillRepositoryTests {
         #expect(first.first?.id == second.first?.id)
     }
 
-    @Test func updateSkillGroupPersistsInSidecar() throws {
+    @Test func updateSkillGroupIsLocationDerivedNoOpKeepingID() throws {
         let directory = temporaryDirectory()
         let claudeSkills = temporaryDirectory()
         let source = try makeSourceSkill(name: "demo-skill", description: "d")
@@ -130,8 +131,11 @@ struct SkillRepositoryTests {
         let skill = try repository.importSkill(fromDirectory: source, group: nil)
         #expect(skill.group == nil)
 
+        // Grouping moved from the sidecar to the folder location, so updateSkillGroup no
+        // longer changes the group — it stays nil for a skill at the skills root — while
+        // still preserving the skill's identity.
         let moved = try repository.updateSkillGroup(id: skill.id, group: "Research")
-        #expect(moved.group == "Research")
+        #expect(moved.group == nil)
         #expect(moved.id == skill.id)
 
         let reloaded = try repository.load().items.first { $0.kind == .skill }

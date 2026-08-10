@@ -343,7 +343,8 @@ extension LibraryRepository {
                 id: found.skill.id, group: nil,
                 createdAt: found.skill.createdAt, updatedAt: found.skill.updatedAt
             )
-            sidecar.group = group
+            // note: group is now location-derived; this write no longer affects reload.
+            sidecar.group = nil
             sidecar.updatedAt = Date()
             try writeSidecar(sidecar, in: found.url)
             guard let skill = readSkill(at: found.url) else {
@@ -436,7 +437,9 @@ extension LibraryRepository {
             id: sidecar?.id ?? Self.stableSkillID(forName: folderURL.lastPathComponent),
             name: doc.fields["name"] ?? folderURL.lastPathComponent,
             description: doc.fields["description"] ?? "",
-            group: sidecar?.group,
+            // Group is location-derived (set by load() from the folder path). A stale
+            // sidecar group must never shadow an item's real folder, so ignore it here.
+            group: nil,
             body: doc.body,
             files: supportingFiles(in: folderURL),
             createdAt: created,

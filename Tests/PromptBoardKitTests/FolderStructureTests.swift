@@ -116,4 +116,30 @@ struct FolderStructureTests {
         #expect(FileManager.default.fileExists(atPath: repo.promptsDirectoryURL.appendingPathComponent("Notes-2/marker.txt").path))
         #expect(!FileManager.default.fileExists(atPath: doomed.path))
     }
+
+    @Test func moveSkillRelinksItsSymlinkToTheNewLocation() throws {
+        let repo = tempLibrary()
+        let skill = try repo.createSkill(name: "Logo Export", description: "d", group: nil, body: "b")
+        try repo.moveSkill(id: skill.id, toFolder: "Work")
+
+        let movedSource = repo.skillsDirectoryURL.appendingPathComponent("Work/logo-export").standardizedFileURL.path
+        for dir in repo.syncTargets.all {
+            let link = dir.appendingPathComponent("logo-export")
+            #expect(SymlinkManager.resolvedDestination(of: link)?.path == movedSource)
+        }
+    }
+
+    @Test func reconcileKeepsNestedSkillsLinkedInsteadOfPruningThem() throws {
+        let repo = tempLibrary()
+        let skill = try repo.createSkill(name: "Logo Export", description: "d", group: nil, body: "b")
+        try repo.moveSkill(id: skill.id, toFolder: "Work")
+
+        _ = try repo.reconcileSync()
+
+        let source = repo.skillsDirectoryURL.appendingPathComponent("Work/logo-export").standardizedFileURL.path
+        for dir in repo.syncTargets.all {
+            let link = dir.appendingPathComponent("logo-export")
+            #expect(SymlinkManager.resolvedDestination(of: link)?.path == source)
+        }
+    }
 }

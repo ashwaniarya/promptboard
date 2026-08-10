@@ -107,6 +107,45 @@ extension LibraryRepository {
         }
     }
 
+    public func movePrompt(id: UUID, toFolder folder: String?) throws {
+        try withExclusiveLock {
+            guard let found = try findPromptFile(id: id) else {
+                throw LibraryRepositoryError.promptNotFound(id)
+            }
+            let destDir = try folderURL(for: .prompt, path: folder)
+            try ensureDirectory(destDir)
+            let destination = uniqueDestination(for: found.url.lastPathComponent, in: destDir)
+            do {
+                try FileManager.default.moveItem(at: found.url, to: destination)
+            } catch {
+                throw LibraryRepositoryError.ioFailure(underlying: error)
+            }
+        }
+    }
+
+    public func moveSkill(id: UUID, toFolder folder: String?) throws {
+        try withExclusiveLock {
+            guard let found = try findSkillFolder(id: id) else {
+                throw LibraryRepositoryError.skillNotFound(id)
+            }
+            let name = found.url.lastPathComponent
+            let destDir = try folderURL(for: .skill, path: folder)
+            try ensureDirectory(destDir)
+            let destination = destDir.appendingPathComponent(name)
+            guard !FileManager.default.fileExists(atPath: destination.path) else {
+                throw LibraryRepositoryError.skillLinkConflict(name: name, path: destination.path)
+            }
+            SymlinkManager.unlink(name: name, from: syncTargets.all, expectedTarget: found.url)
+            do {
+                try FileManager.default.moveItem(at: found.url, to: destination)
+            } catch {
+                linkSkill(at: found.url, name: name)
+                throw LibraryRepositoryError.ioFailure(underlying: error)
+            }
+            linkSkill(at: destination, name: name)
+        }
+    }
+
     // Appends a numeric suffix if a same-named entry already exists in `directory`.
     private func uniqueDestination(for name: String, in directory: URL) -> URL {
         var candidate = directory.appendingPathComponent(name)

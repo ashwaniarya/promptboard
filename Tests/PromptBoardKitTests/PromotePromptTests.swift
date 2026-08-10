@@ -27,7 +27,8 @@ struct PromotePromptTests {
 
         #expect(skill.name == "big-one")
         #expect(skill.body == "# Huge\nlots of steps")
-        #expect(skill.group == "Coding")
+        // Group is location-derived now; promoting into the skills root yields group nil.
+        #expect(skill.group == nil)
         let items = try repository.load().items
         #expect(!items.contains { $0.id == prompt.id })
         #expect(items.contains { $0.id == skill.id })
