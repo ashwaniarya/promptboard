@@ -113,6 +113,9 @@ extension LibraryRepository {
                 throw LibraryRepositoryError.promptNotFound(id)
             }
             let destDir = try folderURL(for: .prompt, path: folder)
+            // Already there → no-op. Both sides are directory URLs, so standardizedFileURL
+            // (which does NOT normalize a trailing slash) compares them correctly; keep
+            // destDir built with isDirectory:true and compare the file's parent, not the file.
             if found.url.deletingLastPathComponent().standardizedFileURL == destDir.standardizedFileURL {
                 return
             }
@@ -133,6 +136,9 @@ extension LibraryRepository {
             }
             let name = found.url.lastPathComponent
             let destDir = try folderURL(for: .skill, path: folder)
+            // Already there → no-op (return BEFORE unlink so the symlink is untouched).
+            // Both sides are directory URLs; standardizedFileURL doesn't normalize a
+            // trailing slash, so keep destDir built with isDirectory:true for this compare.
             if found.url.deletingLastPathComponent().standardizedFileURL == destDir.standardizedFileURL {
                 return
             }

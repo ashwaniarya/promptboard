@@ -78,7 +78,10 @@ public struct LibraryRepository: Sendable {
             try ensureDirectory(destDir)
             let normalized = Self.normalizedTitle(title)
             let slug = Slug.unique(Slug.make(from: normalized), existing: existingPromptSlugs())
-            let prompt = Prompt(title: normalized, content: content, group: nil)
+            // group is not persisted to frontmatter (writePrompt drops it) — location is
+            // the source of truth. We echo it on the returned value so a CLI/MCP `add`
+            // response reports the folder the prompt was filed into; load() re-derives it.
+            let prompt = Prompt(title: normalized, content: content, group: group)
             try writePrompt(prompt, to: destDir.appendingPathComponent("\(slug).md"))
             return prompt
         }

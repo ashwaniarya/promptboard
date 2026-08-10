@@ -183,6 +183,18 @@ struct FolderStructureTests {
         let loaded = try repo.load().items.first
         #expect(loaded?.group == "Work/Ops")
         #expect(loaded?.id == prompt.id)
+        // The returned value echoes the folder it was filed into (for CLI/MCP responses).
+        #expect(prompt.group == "Work/Ops")
+    }
+
+    @Test func addPromptWithATraversalGroupThrowsAndWritesNothingOutsideTheTree() throws {
+        let repo = tempLibrary()
+        #expect(throws: LibraryRepositoryError.self) {
+            try repo.addPrompt(title: "Escape", content: "b", group: "../escape")
+        }
+        // Nothing leaked outside the prompts tree.
+        let escaped = repo.libraryURL.appendingPathComponent("escape.md").path
+        #expect(!FileManager.default.fileExists(atPath: escaped))
     }
 
     @Test func movePromptToItsCurrentFolderIsANoOpNotADuplicate() throws {
