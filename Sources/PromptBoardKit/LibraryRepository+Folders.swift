@@ -1,5 +1,8 @@
 import Foundation
 
+// Folder side of the library: create/rename/delete organizational directories under
+// the prompts and skills trees, repointing any contained skill's symlinks on a move.
+// Same discipline as LibraryRepository — self-locking RMW, atomic FS ops.
 extension LibraryRepository {
     func treeRoot(for kind: LibraryEntry.Kind) -> URL {
         kind == .prompt ? promptsDirectoryURL : skillsDirectoryURL
@@ -54,9 +57,9 @@ extension LibraryRepository {
             }
             for oldSkillURL in movingSkills {
                 let name = oldSkillURL.lastPathComponent
-                let relative = String(oldSkillURL.standardizedFileURL.path
+                let relativeSuffix = String(oldSkillURL.standardizedFileURL.path
                     .dropFirst(oldURL.standardizedFileURL.path.count))
-                let newSkillURL = URL(fileURLWithPath: newURL.standardizedFileURL.path + relative)
+                let newSkillURL = URL(fileURLWithPath: newURL.standardizedFileURL.path + relativeSuffix)
                 SymlinkManager.unlink(name: name, from: syncTargets.all, expectedTarget: oldSkillURL)
                 linkSkill(at: newSkillURL, name: name)
             }
@@ -77,22 +80,30 @@ extension LibraryRepository {
             for child in children {
                 // Record skill sources under this child before moving it up.
                 let movingSkills = kind == .skill ? skillFolderURLs().filter {
-                    let p = $0.standardizedFileURL.path
-                    return p == child.standardizedFileURL.path
-                        || p.hasPrefix(child.standardizedFileURL.path + "/")
+                    let skillPath = $0.standardizedFileURL.path
+                    return skillPath == child.standardizedFileURL.path
+                        || skillPath.hasPrefix(child.standardizedFileURL.path + "/")
                 } : []
                 let destination = uniqueDestination(for: child.lastPathComponent, in: parent)
-                try FileManager.default.moveItem(at: child, to: destination)
+                do {
+                    try FileManager.default.moveItem(at: child, to: destination)
+                } catch {
+                    throw LibraryRepositoryError.ioFailure(underlying: error)
+                }
                 for oldSkillURL in movingSkills {
                     let name = oldSkillURL.lastPathComponent
-                    let relative = String(oldSkillURL.standardizedFileURL.path
+                    let relativeSuffix = String(oldSkillURL.standardizedFileURL.path
                         .dropFirst(child.standardizedFileURL.path.count))
-                    let newSkillURL = URL(fileURLWithPath: destination.standardizedFileURL.path + relative)
+                    let newSkillURL = URL(fileURLWithPath: destination.standardizedFileURL.path + relativeSuffix)
                     SymlinkManager.unlink(name: name, from: syncTargets.all, expectedTarget: oldSkillURL)
                     linkSkill(at: newSkillURL, name: name)
                 }
             }
-            try? FileManager.default.removeItem(at: url)
+            do {
+                try FileManager.default.removeItem(at: url)
+            } catch {
+                throw LibraryRepositoryError.ioFailure(underlying: error)
+            }
         }
     }
 
@@ -100,10 +111,10 @@ extension LibraryRepository {
     private func uniqueDestination(for name: String, in directory: URL) -> URL {
         var candidate = directory.appendingPathComponent(name)
         var counter = 2
-        let ext = (name as NSString).pathExtension
+        let fileExtension = (name as NSString).pathExtension
         let stem = (name as NSString).deletingPathExtension
         while FileManager.default.fileExists(atPath: candidate.path) {
-            let suffixed = ext.isEmpty ? "\(stem)-\(counter)" : "\(stem)-\(counter).\(ext)"
+            let suffixed = fileExtension.isEmpty ? "\(stem)-\(counter)" : "\(stem)-\(counter).\(fileExtension)"
             candidate = directory.appendingPathComponent(suffixed)
             counter += 1
         }

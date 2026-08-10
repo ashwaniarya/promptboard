@@ -88,4 +88,32 @@ struct FolderStructureTests {
         #expect(FileManager.default.fileExists(atPath: parent.appendingPathComponent("n.md").path))
         #expect(!FileManager.default.fileExists(atPath: doomed.path))
     }
+
+    @Test func deleteFolderRefusesToDeleteTheTreeRoot() throws {
+        let repo = tempLibrary()
+        try repo.ensureLibraryDirectories()
+        #expect(throws: LibraryRepositoryError.self) {
+            try repo.deleteFolder(kind: .prompt, path: "")
+        }
+    }
+
+    @Test func deleteFolderSuffixesAChildThatCollidesWithAnExistingSibling() throws {
+        let repo = tempLibrary()
+        try repo.ensureLibraryDirectories()
+        // A "Notes" folder already exists at the prompts root.
+        let existing = repo.promptsDirectoryURL.appendingPathComponent("Notes", isDirectory: true)
+        try FileManager.default.createDirectory(at: existing, withIntermediateDirectories: true)
+        // A doomed folder that also contains a "Notes" child.
+        let doomed = repo.promptsDirectoryURL.appendingPathComponent("Doomed", isDirectory: true)
+        let collidingChild = doomed.appendingPathComponent("Notes", isDirectory: true)
+        try FileManager.default.createDirectory(at: collidingChild, withIntermediateDirectories: true)
+        try "x".write(to: collidingChild.appendingPathComponent("marker.txt"), atomically: true, encoding: .utf8)
+
+        try repo.deleteFolder(kind: .prompt, path: "Doomed")
+
+        // The original Notes survives, and the colliding child lands as Notes-2.
+        #expect(FileManager.default.fileExists(atPath: existing.path))
+        #expect(FileManager.default.fileExists(atPath: repo.promptsDirectoryURL.appendingPathComponent("Notes-2/marker.txt").path))
+        #expect(!FileManager.default.fileExists(atPath: doomed.path))
+    }
 }
