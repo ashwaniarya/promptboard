@@ -229,6 +229,7 @@ public final class LibraryStore {
         if freshInstall, !migrated {
             _ = try? repository.seedPromptsIfEmpty(SeedPrompts.samples)
         }
+        _ = try? repository.migrateGroupsToFoldersIfNeeded()
         refreshFromDisk()
         refreshExternalItems()
     }

@@ -173,4 +173,54 @@ extension LibraryRepository {
         }
         return candidate
     }
+
+    private var folderMigrationMarkerURL: URL {
+        libraryURL.appendingPathComponent(".promptboard-folders-v1")
+    }
+
+    // One-time: move each item whose legacy frontmatter/sidecar `group` is set into a
+    // top-level folder of that name. Idempotent via a marker file. Reads the group
+    // directly (readPrompt/readSkill now ignore it) so it can act before the marker.
+    @discardableResult
+    public func migrateGroupsToFoldersIfNeeded() throws -> Bool {
+        guard !FileManager.default.fileExists(atPath: folderMigrationMarkerURL.path) else { return false }
+        return try withExclusiveLock {
+            guard !FileManager.default.fileExists(atPath: folderMigrationMarkerURL.path) else { return false }
+
+            for url in promptFileURLsForMigration() {
+                guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
+                guard let group = Frontmatter.parse(text).fields["group"], !group.isEmpty else { continue }
+                guard Self.folderPath(of: url, underRoot: promptsDirectoryURL) == nil else { continue }
+                let destDir = try folderURL(for: .prompt, path: group)
+                try ensureDirectory(destDir)
+                let destination = uniqueDestination(for: url.lastPathComponent, in: destDir)
+                try? FileManager.default.moveItem(at: url, to: destination)
+            }
+            for folderURL in skillFolderURLs() {
+                guard let group = readSidecar(in: folderURL)?.group, !group.isEmpty else { continue }
+                guard Self.folderPath(of: folderURL, underRoot: skillsDirectoryURL) == nil else { continue }
+                let name = folderURL.lastPathComponent
+                let destDir = try self.folderURL(for: .skill, path: group)
+                try ensureDirectory(destDir)
+                let destination = destDir.appendingPathComponent(name)
+                guard !FileManager.default.fileExists(atPath: destination.path) else { continue }
+                SymlinkManager.unlink(name: name, from: syncTargets.all, expectedTarget: folderURL)
+                try? FileManager.default.moveItem(at: folderURL, to: destination)
+                linkSkill(at: destination, name: name)
+            }
+
+            try Data("v1".utf8).write(to: folderMigrationMarkerURL, options: .atomic)
+            return true
+        }
+    }
+
+    // A flat, top-level list of prompt `.md` files for migration. Migration only moves
+    // items still at the root (guarded by folderPath == nil), so a one-level scan suffices
+    // and avoids re-visiting already-migrated files under new subfolders.
+    private func promptFileURLsForMigration() -> [URL] {
+        let entries = (try? FileManager.default.contentsOfDirectory(
+            at: promptsDirectoryURL, includingPropertiesForKeys: nil
+        )) ?? []
+        return entries.filter { $0.pathExtension == "md" }
+    }
 }

@@ -225,4 +225,40 @@ struct FolderStructureTests {
             #expect(SymlinkManager.resolvedDestination(of: dir.appendingPathComponent("logo-export"))?.path == source)
         }
     }
+
+    @Test func migrationMovesFlatGroupedItemsIntoFoldersAndLeavesUngroupedAtRoot() throws {
+        let repo = tempLibrary()
+        try repo.ensureLibraryDirectories()
+        // A legacy grouped prompt (group in frontmatter, file at root).
+        try "---\nid: \(UUID().uuidString)\ntitle: Grouped\ngroup: Work\n---\nb"
+            .write(to: repo.promptsDirectoryURL.appendingPathComponent("grouped.md"), atomically: true, encoding: .utf8)
+        // An ungrouped prompt stays put.
+        try "---\nid: \(UUID().uuidString)\ntitle: Loose\n---\nb"
+            .write(to: repo.promptsDirectoryURL.appendingPathComponent("loose.md"), atomically: true, encoding: .utf8)
+
+        let didRun = try repo.migrateGroupsToFoldersIfNeeded()
+
+        #expect(didRun)
+        #expect(FileManager.default.fileExists(atPath: repo.promptsDirectoryURL.appendingPathComponent("Work/grouped.md").path))
+        #expect(FileManager.default.fileExists(atPath: repo.promptsDirectoryURL.appendingPathComponent("loose.md").path))
+        // Idempotent: a second run is a no-op.
+        #expect(try repo.migrateGroupsToFoldersIfNeeded() == false)
+    }
+
+    @Test func migrationMovesAGroupedSkillIntoItsFolderAndRepointsTheSymlink() throws {
+        let repo = tempLibrary()
+        // Author a skill at root, then hand-write a legacy group into its sidecar.
+        let skill = try repo.createSkill(name: "Logo Export", description: "d", group: nil, body: "b")
+        let folder = repo.skillsDirectoryURL.appendingPathComponent("logo-export", isDirectory: true)
+        try "{\"id\":\"\(skill.id.uuidString)\",\"group\":\"Brand\",\"createdAt\":\"2020-01-01T00:00:00.000Z\",\"updatedAt\":\"2020-01-01T00:00:00.000Z\"}"
+            .write(to: folder.appendingPathComponent(".promptboard.json"), atomically: true, encoding: .utf8)
+
+        _ = try repo.migrateGroupsToFoldersIfNeeded()
+
+        let movedSource = repo.skillsDirectoryURL.appendingPathComponent("Brand/logo-export").standardizedFileURL.path
+        #expect(FileManager.default.fileExists(atPath: movedSource + "/SKILL.md"))
+        for dir in repo.syncTargets.all {
+            #expect(SymlinkManager.resolvedDestination(of: dir.appendingPathComponent("logo-export"))?.path == movedSource)
+        }
+    }
 }
