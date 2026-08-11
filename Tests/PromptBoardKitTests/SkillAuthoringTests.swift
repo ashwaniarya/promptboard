@@ -87,8 +87,9 @@ struct SkillAuthoringTests {
         #expect(updated.id == skill.id)
         #expect(updated.name == "notes")
         #expect(updated.description == "new desc")
-        // Group is location-derived now; updating a skill at the skills root leaves group nil.
-        #expect(updated.group == nil)
+        // updateSkill echoes the destination folder it filed the skill into (parity with
+        // updatePrompt); `group: "G"` moves it to skills/G, so the return reports "G".
+        #expect(updated.group == "G")
         #expect(updated.body == "# New")
     }
 

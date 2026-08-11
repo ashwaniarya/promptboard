@@ -163,7 +163,18 @@ public struct LibraryRepository: Sendable {
                 // A legacy prompt's `group` is a folder destination now: file it straight into
                 // prompts/<group>/ (bad/absent group → root, don't abort). writePrompt drops the
                 // group frontmatter key, so writing at root would lose the label — location is truth.
-                let destDir = (try? folderURL(for: .prompt, path: prompt.group)) ?? promptsDirectoryURL
+                // Warn on a malformed group (parity with migrateGroupsToFoldersIfNeeded).
+                let destDir: URL
+                if let group = prompt.group, !group.isEmpty {
+                    if let resolved = try? folderURL(for: .prompt, path: group) {
+                        destDir = resolved
+                    } else {
+                        logWarning("legacy migration: filing \"\(prompt.title)\" at root — invalid group \"\(group)\"")
+                        destDir = promptsDirectoryURL
+                    }
+                } else {
+                    destDir = promptsDirectoryURL
+                }
                 try ensureDirectory(destDir)
                 try writePrompt(prompt, to: destDir.appendingPathComponent("\(slug).md"))
             }
@@ -361,12 +372,13 @@ extension LibraryRepository {
             guard let found = try findSkillFolder(id: id) else {
                 throw LibraryRepositoryError.skillNotFound(id)
             }
-            let newURL = try relocateSkillFolder(
-                at: found.url, toFolder: group, name: found.url.lastPathComponent
-            )
-            guard let skill = readSkill(at: newURL) else {
+            let newURL = try relocateSkillFolder(at: found.url, toFolder: group)
+            guard var skill = readSkill(at: newURL) else {
                 throw LibraryRepositoryError.skillNotFound(id)
             }
+            // readSkill hardcodes group nil (location is truth); echo where it landed,
+            // matching updatePrompt so callers see the destination folder.
+            skill.group = Self.folderPath(of: newURL, underRoot: skillsDirectoryURL)
             return skill
         }
     }

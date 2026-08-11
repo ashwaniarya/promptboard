@@ -487,4 +487,25 @@ struct FolderStructureTests {
 
         #expect(paths == ["Personal", "Work", "Work/ClientA"])
     }
+
+    @Test func updateSkillRefusesAtomicallyWhenTheDestinationFolderIsOccupied() throws {
+        let repo = tempLibrary()
+        let skill = try repo.createSkill(name: "Draft One", description: "d", group: nil, body: "original")
+        // An organizational folder in group "B" whose name equals the skill's leaf slug.
+        let occupied = repo.skillsDirectoryURL.appendingPathComponent("B/draft-one", isDirectory: true)
+        try FileManager.default.createDirectory(at: occupied, withIntermediateDirectories: true)
+        try "blocker".write(to: occupied.appendingPathComponent("keep.txt"), atomically: true, encoding: .utf8)
+
+        // Update that would rename to the same slug and move into B — must refuse, touching nothing.
+        #expect(throws: LibraryRepositoryError.self) {
+            _ = try repo.updateSkill(id: skill.id, name: "Draft One", description: "d2", group: "B", body: "changed")
+        }
+
+        // Atomic: the skill is untouched at its original root location with its ORIGINAL body.
+        let stillThere = repo.skillsDirectoryURL.appendingPathComponent("draft-one/SKILL.md")
+        #expect(FileManager.default.fileExists(atPath: stillThere.path))
+        #expect((try? String(contentsOf: stillThere, encoding: .utf8))?.contains("original") == true)
+        // The occupying folder is untouched.
+        #expect(FileManager.default.fileExists(atPath: occupied.appendingPathComponent("keep.txt").path))
+    }
 }

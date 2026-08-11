@@ -153,7 +153,7 @@ extension LibraryRepository {
             guard let found = try findSkillFolder(id: id) else {
                 throw LibraryRepositoryError.skillNotFound(id)
             }
-            _ = try relocateSkillFolder(at: found.url, toFolder: folder, name: found.url.lastPathComponent)
+            _ = try relocateSkillFolder(at: found.url, toFolder: folder)
         }
     }
 
@@ -176,7 +176,10 @@ extension LibraryRepository {
 
     // Lock-free: caller must hold the lock. Relocates a skill folder into `folder` (nil = root),
     // repointing its symlink. Same-folder → no-op. Refuses (never suffixes) a destination clash.
-    func relocateSkillFolder(at currentURL: URL, toFolder folder: String?, name: String) throws -> URL {
+    // The leaf name IS the folder's identity, so it's derived from `currentURL` — never passed in
+    // (a mismatched name would unlink the wrong symlink).
+    func relocateSkillFolder(at currentURL: URL, toFolder folder: String?) throws -> URL {
+        let name = currentURL.lastPathComponent
         let destDir = try folderURL(for: .skill, path: folder)
         // Already there → no-op (return BEFORE unlink so the symlink is untouched).
         // Both sides are directory URLs; standardizedFileURL doesn't normalize a
