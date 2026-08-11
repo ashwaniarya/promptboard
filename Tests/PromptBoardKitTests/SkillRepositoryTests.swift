@@ -47,10 +47,12 @@ struct SkillRepositoryTests {
         let skill = try repository.importSkill(fromDirectory: source, group: "Tools")
 
         #expect(skill.name == "demo-skill")
-        #expect(skill.group == "Tools")
+        // The returned Skill's group is always nil (location is truth, seen via load()); the
+        // `group: "Tools"` argument files the copy into skills/Tools/.
+        #expect(skill.group == nil)
         #expect(skill.files.map(\.relativePath) == ["reference.md"])
 
-        let skillFolder = directory.appendingPathComponent("Library/skills/demo-skill")
+        let skillFolder = directory.appendingPathComponent("Library/skills/Tools/demo-skill")
         #expect(FileManager.default.fileExists(atPath: skillFolder.appendingPathComponent("SKILL.md").path))
         #expect(FileManager.default.fileExists(atPath: skillFolder.appendingPathComponent(".promptboard.json").path))
 
@@ -119,7 +121,7 @@ struct SkillRepositoryTests {
         #expect(first.first?.id == second.first?.id)
     }
 
-    @Test func updateSkillGroupPersistsInSidecar() throws {
+    @Test func updateSkillGroupMovesTheSkillIntoTheGroupFolderKeepingID() throws {
         let directory = temporaryDirectory()
         let claudeSkills = temporaryDirectory()
         let source = try makeSourceSkill(name: "demo-skill", description: "d")
@@ -128,13 +130,17 @@ struct SkillRepositoryTests {
             syncTargets: targets(claude: claudeSkills)
         )
         let skill = try repository.importSkill(fromDirectory: source, group: nil)
-        #expect(skill.group == nil)
 
+        // updateSkillGroup now performs a real folder move (like moveSkill): the skill lands
+        // in skills/Research/ and load() derives its group from that location. The returned
+        // Skill's group stays nil (readSkill is location-agnostic); the id is preserved.
         let moved = try repository.updateSkillGroup(id: skill.id, group: "Research")
-        #expect(moved.group == "Research")
         #expect(moved.id == skill.id)
 
+        #expect(FileManager.default.fileExists(atPath: directory.appendingPathComponent("Library/skills/Research/demo-skill/SKILL.md").path))
         let reloaded = try repository.load().items.first { $0.kind == .skill }
         #expect(reloaded?.group == "Research")
+        #expect(SymlinkManager.resolvedDestination(of: claudeSkills.appendingPathComponent("demo-skill"))?.path
+                == directory.appendingPathComponent("Library/skills/Research/demo-skill").standardizedFileURL.path)
     }
 }

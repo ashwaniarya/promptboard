@@ -27,10 +27,12 @@ struct SkillAuthoringTests {
 
         #expect(skill.name == "deploy-runbook")
         #expect(skill.description == "Steps to deploy")
-        #expect(skill.group == "Ops")
+        // The returned Skill's group is always nil (readSkill hardcodes it; location is truth,
+        // seen via load()). The `group: "Ops"` argument files the skill into skills/Ops/.
+        #expect(skill.group == nil)
         #expect(skill.body == "# Deploy")
 
-        let folder = directory.appendingPathComponent("Library/skills/deploy-runbook")
+        let folder = directory.appendingPathComponent("Library/skills/Ops/deploy-runbook")
         let markdown = try String(contentsOf: folder.appendingPathComponent("SKILL.md"), encoding: .utf8)
         #expect(markdown.contains("name: deploy-runbook"))
         #expect(markdown.contains("description: Steps to deploy"))
@@ -85,6 +87,8 @@ struct SkillAuthoringTests {
         #expect(updated.id == skill.id)
         #expect(updated.name == "notes")
         #expect(updated.description == "new desc")
+        // updateSkill echoes the destination folder it filed the skill into (parity with
+        // updatePrompt); `group: "G"` moves it to skills/G, so the return reports "G".
         #expect(updated.group == "G")
         #expect(updated.body == "# New")
     }

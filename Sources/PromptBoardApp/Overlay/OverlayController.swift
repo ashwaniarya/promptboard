@@ -17,6 +17,9 @@ final class OverlayController {
         appState.requestFocusSearchField = { [weak self] in
             self?.focusTextField(placeholder: Constants.searchFieldPlaceholder)
         }
+        appState.requestFocusNewFolder = { [weak self] in
+            self?.focusTextField(placeholder: Constants.newFolderPlaceholder)
+        }
     }
 
     var isVisible: Bool {

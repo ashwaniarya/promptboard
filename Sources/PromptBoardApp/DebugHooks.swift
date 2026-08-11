@@ -23,6 +23,9 @@ enum DebugHooks {
     static let adoptFirstExternalNotification = "com.arya.PromptBoard.debug.adoptFirstExternal"
     static let dumpSyncConflictsNotification = "com.arya.PromptBoard.debug.dumpSyncConflicts"
     static let beginAdoptFirstNotification = "com.arya.PromptBoard.debug.beginAdoptFirst"
+    static let createFolderNotification = "com.arya.PromptBoard.debug.createFolder"
+    static let moveFirstItemNotification = "com.arya.PromptBoard.debug.moveFirstItem"
+    static let dumpFolderTreeNotification = "com.arya.PromptBoard.debug.dumpFolderTree"
 
     static var isEnabled: Bool {
         ProcessInfo.processInfo.environment["PROMPTBOARD_DEBUG"] == "1"
@@ -61,6 +64,9 @@ enum DebugHooks {
             (adoptFirstExternalNotification, #selector(DebugHookTarget.handleAdoptFirstExternal(_:))),
             (dumpSyncConflictsNotification, #selector(DebugHookTarget.handleDumpSyncConflicts(_:))),
             (beginAdoptFirstNotification, #selector(DebugHookTarget.handleBeginAdoptFirst(_:))),
+            (createFolderNotification, #selector(DebugHookTarget.handleCreateFolder(_:))),
+            (moveFirstItemNotification, #selector(DebugHookTarget.handleMoveFirstItem(_:))),
+            (dumpFolderTreeNotification, #selector(DebugHookTarget.handleDumpFolderTree(_:))),
         ]
         for (name, selector) in hooks {
             center.addObserver(
@@ -311,6 +317,39 @@ private final class DebugHookTarget: NSObject {
             }
             appState.beginAdopting(item)
             NSLog("%@", "PromptBoardDebug beginAdoptFirst -> \(item.name)")
+        }
+    }
+
+    @objc nonisolated func handleCreateFolder(_ notification: Notification) {
+        let name = notification.object as? String ?? "Untitled"
+        MainActor.assumeIsolated {
+            appState.createFolder(named: name, under: nil)
+            let paths = appState.folderTree.map { "\($0.path)(\($0.subtreeCount))" }.joined(separator: ", ")
+            NSLog("%@", "PromptBoardDebug createFolder \(name) -> folderTree: \(paths)")
+        }
+    }
+
+    @objc nonisolated func handleMoveFirstItem(_ notification: Notification) {
+        let folder = notification.object as? String
+        MainActor.assumeIsolated {
+            guard let first = appState.visibleItems.first else {
+                NSLog("%@", "PromptBoardDebug moveFirstItem -> no visible item")
+                return
+            }
+            appState.moveItem(id: first.id, toFolder: folder)
+            NSLog("%@", "PromptBoardDebug moveFirstItem \(first.title) -> \(folder ?? "root")")
+        }
+    }
+
+    @objc nonisolated func handleDumpFolderTree(_ notification: Notification) {
+        MainActor.assumeIsolated {
+            func dump(_ node: FolderNode, indent: String) {
+                NSLog("%@", "PromptBoardDebug folderTree: \(indent)\(node.path)(\(node.subtreeCount))")
+                for child in node.children { dump(child, indent: indent + "  ") }
+            }
+            let tree = appState.folderTree
+            NSLog("%@", "PromptBoardDebug folderTree: count=\(tree.count)")
+            for node in tree { dump(node, indent: "") }
         }
     }
 

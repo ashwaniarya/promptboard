@@ -18,16 +18,11 @@ extension LibraryRepository {
 
         // Folder names are the on-disk truth. `Skill.name` comes from SKILL.md and
         // can differ from its folder (collision suffixes, hand edits), so enumerate.
+        // Recursive: a skill may live at any depth; its symlink name is the leaf name.
         var skillNames = Set<String>()
         var sources: [String: URL] = [:]
-        let skillFolders = (try? FileManager.default.contentsOfDirectory(
-            at: skillsDirectoryURL, includingPropertiesForKeys: nil
-        )) ?? []
-        for folder in skillFolders {
+        for folder in skillFolderURLs() {
             let name = folder.lastPathComponent
-            guard !name.hasPrefix("."),
-                  FileManager.default.fileExists(atPath: folder.appendingPathComponent("SKILL.md").path)
-            else { continue }
             skillNames.insert(name)
             sources[name] = folder
         }

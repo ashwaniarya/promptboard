@@ -8,12 +8,16 @@ extension LibraryRepository {
     public func createSkill(name: String, description: String, group: String?, body: String) throws -> Skill {
         try withExclusiveLock {
             let folderName = Slug.unique(Slug.make(from: name), existing: existingSkillFolderNames())
-            try ensureDirectory(skillsDirectoryURL)
-            let destination = skillFolderURL(name: folderName)
+            // group is a folder destination: file into skills/<group>/<folderName>/ (nil = root),
+            // mirroring addPrompt(group:). The symlink stays flat (leaf name); sidecar group
+            // stays nil since location is truth (load() derives group from the folder path).
+            let destDir = try folderURL(for: .skill, path: group)
+            try ensureDirectory(destDir)
+            let destination = destDir.appendingPathComponent(folderName)
             try ensureDirectory(destination)
             try writeSkillMarkdown(name: folderName, description: description, body: body, in: destination)
             let now = Date()
-            try writeSidecar(SkillSidecar(id: UUID(), group: group, createdAt: now, updatedAt: now), in: destination)
+            try writeSidecar(SkillSidecar(id: UUID(), group: nil, createdAt: now, updatedAt: now), in: destination)
             linkSkill(at: destination, name: folderName)
             guard let skill = readSkill(at: destination) else {
                 throw LibraryRepositoryError.invalidSkillSource(path: destination.path)
@@ -33,12 +37,14 @@ extension LibraryRepository {
                 throw LibraryRepositoryError.promptNotFound(promptID)
             }
             let folderName = Slug.unique(Slug.make(from: name), existing: existingSkillFolderNames())
-            try ensureDirectory(skillsDirectoryURL)
-            let destination = skillFolderURL(name: folderName)
+            // group is a folder destination — file into skills/<group>/ (nil = root), as createSkill does.
+            let destDir = try folderURL(for: .skill, path: group)
+            try ensureDirectory(destDir)
+            let destination = destDir.appendingPathComponent(folderName)
             try ensureDirectory(destination)
             try writeSkillMarkdown(name: folderName, description: description, body: found.prompt.content, in: destination)
             let now = Date()
-            try writeSidecar(SkillSidecar(id: UUID(), group: group, createdAt: now, updatedAt: now), in: destination)
+            try writeSidecar(SkillSidecar(id: UUID(), group: nil, createdAt: now, updatedAt: now), in: destination)
             linkSkill(at: destination, name: folderName)
             if removingPrompt {
                 do {
@@ -61,29 +67,53 @@ extension LibraryRepository {
                 throw LibraryRepositoryError.skillNotFound(id)
             }
             let currentFolderName = found.url.lastPathComponent
-            var folderURL = found.url
-            var effectiveName = currentFolderName
 
+            // Resolve the final leaf name WITHOUT touching the filesystem yet.
             let desiredSlug = Slug.make(from: name)
+            let effectiveName: String
             if desiredSlug != currentFolderName {
-                let others = existingSkillFolderNames().subtracting([currentFolderName])
-                let newFolderName = Slug.unique(desiredSlug, existing: others)
-                folderURL = try renameSkillFolder(from: found.url, to: newFolderName)
-                effectiveName = newFolderName
+                effectiveName = Slug.unique(desiredSlug, existing: existingSkillFolderNames().subtracting([currentFolderName]))
+            } else {
+                effectiveName = currentFolderName
             }
 
-            try writeSkillMarkdown(name: effectiveName, description: description, body: body, in: folderURL)
-            let existing = readSidecar(in: folderURL)
+            // Fail-fast BEFORE any mutation: if the final destination folder already holds
+            // something named the final leaf (and it isn't this skill), refuse now.
+            // existingSkillFolderNames() only counts skill leaves, so Slug.unique won't have
+            // deduped against a plain org-folder — this guards the relocate below so the save
+            // is all-or-nothing (no renamed-and-rewritten skill stranded on a late collision).
+            let finalDestination = try self.folderURL(for: .skill, path: group).appendingPathComponent(effectiveName)
+            if finalDestination.standardizedFileURL != found.url.standardizedFileURL,
+               FileManager.default.fileExists(atPath: finalDestination.path) {
+                throw LibraryRepositoryError.skillLinkConflict(name: effectiveName, path: finalDestination.path)
+            }
+
+            var currentSkillURL = found.url
+            if effectiveName != currentFolderName {
+                currentSkillURL = try renameSkillFolder(from: found.url, to: effectiveName)
+            }
+
+            try writeSkillMarkdown(name: effectiveName, description: description, body: body, in: currentSkillURL)
+            let existing = readSidecar(in: currentSkillURL)
             try writeSidecar(SkillSidecar(
                 id: found.skill.id,
-                group: group,
+                group: nil,
                 createdAt: existing?.createdAt ?? found.skill.createdAt,
                 updatedAt: Date()
-            ), in: folderURL)
+            ), in: currentSkillURL)
 
-            guard let skill = readSkill(at: folderURL) else {
+            // Honour a group change on save: move the (possibly renamed) folder into the
+            // `group` folder (nil = root). renameSkillFolder above targets the skills ROOT,
+            // so a renamed-in-subfolder skill sits at root here; this pulls it into `group`.
+            // The pre-check above guarantees this relocate can't hit a destination collision.
+            let relocatedURL = try relocateSkillFolder(at: currentSkillURL, toFolder: group)
+
+            guard var skill = readSkill(at: relocatedURL) else {
                 throw LibraryRepositoryError.skillNotFound(id)
             }
+            // readSkill hardcodes group nil (location is truth); echo where it actually landed,
+            // matching updatePrompt so callers see the destination folder.
+            skill.group = Self.folderPath(of: relocatedURL, underRoot: skillsDirectoryURL)
             return skill
         }
     }
@@ -183,7 +213,7 @@ extension LibraryRepository {
         let existing = readSidecar(in: folderURL)
         try writeSidecar(SkillSidecar(
             id: skill.id,
-            group: existing?.group ?? skill.group,
+            group: nil,
             createdAt: existing?.createdAt ?? skill.createdAt,
             updatedAt: Date()
         ), in: folderURL)

@@ -51,14 +51,16 @@ public struct LibraryRepository: Sendable {
         var items: [LibraryEntry] = []
         var skipped: [String] = []
         for url in promptFileURLs() {
-            if let prompt = readPrompt(at: url) {
+            if var prompt = readPrompt(at: url) {
+                prompt.group = Self.folderPath(of: url, underRoot: promptsDirectoryURL)
                 items.append(.prompt(prompt))
             } else {
                 skipped.append(url.path)
             }
         }
         for folderURL in skillFolderURLs() {
-            if let skill = readSkill(at: folderURL) {
+            if var skill = readSkill(at: folderURL) {
+                skill.group = Self.folderPath(of: folderURL, underRoot: skillsDirectoryURL)
                 items.append(.skill(skill))
             } else {
                 skipped.append(folderURL.path)
@@ -72,16 +74,21 @@ public struct LibraryRepository: Sendable {
     @discardableResult
     public func addPrompt(title: String, content: String, group: String? = nil) throws -> Prompt {
         try withExclusiveLock {
-            try ensureDirectory(promptsDirectoryURL)
+            let destDir = try folderURL(for: .prompt, path: group)
+            try ensureDirectory(destDir)
             let normalized = Self.normalizedTitle(title)
             let slug = Slug.unique(Slug.make(from: normalized), existing: existingPromptSlugs())
+            // group is not persisted to frontmatter (writePrompt drops it) — location is
+            // the source of truth. We echo it on the returned value so a CLI/MCP `add`
+            // response reports the folder the prompt was filed into; load() re-derives it.
             let prompt = Prompt(title: normalized, content: content, group: group)
-            try writePrompt(prompt, to: promptsDirectoryURL.appendingPathComponent("\(slug).md"))
+            try writePrompt(prompt, to: destDir.appendingPathComponent("\(slug).md"))
             return prompt
         }
     }
 
-    // group == nil keeps the existing group; clearing a group is deferred to Layer B.
+    // group == nil leaves the folder unchanged (the CLI/MCP omitted-field contract). A
+    // non-nil group is a folder destination and moves the file into it ("" == root).
     @discardableResult
     public func updatePrompt(id: UUID, title: String?, content: String?, group: String? = nil) throws -> Prompt {
         guard title != nil || content != nil || group != nil else {
@@ -97,6 +104,11 @@ public struct LibraryRepository: Sendable {
             if let group { prompt.group = group }
             prompt.updatedAt = Date()
             try writePrompt(prompt, to: found.url)
+            // A supplied group is a folder move; nil leaves the file where it is. The returned
+            // Prompt echoes `group` so a CLI/MCP `update --group` reports the destination folder.
+            if group != nil {
+                _ = try relocatePromptFile(at: found.url, toFolder: group)
+            }
             return prompt
         }
     }
@@ -148,7 +160,23 @@ public struct LibraryRepository: Sendable {
             for prompt in prompts {
                 let slug = Slug.unique(Slug.make(from: prompt.title), existing: used)
                 used.insert(slug)
-                try writePrompt(prompt, to: promptsDirectoryURL.appendingPathComponent("\(slug).md"))
+                // A legacy prompt's `group` is a folder destination now: file it straight into
+                // prompts/<group>/ (bad/absent group → root, don't abort). writePrompt drops the
+                // group frontmatter key, so writing at root would lose the label — location is truth.
+                // Warn on a malformed group (parity with migrateGroupsToFoldersIfNeeded).
+                let destDir: URL
+                if let group = prompt.group, !group.isEmpty {
+                    if let resolved = try? folderURL(for: .prompt, path: group) {
+                        destDir = resolved
+                    } else {
+                        logWarning("legacy migration: filing \"\(prompt.title)\" at root — invalid group \"\(group)\"")
+                        destDir = promptsDirectoryURL
+                    }
+                } else {
+                    destDir = promptsDirectoryURL
+                }
+                try ensureDirectory(destDir)
+                try writePrompt(prompt, to: destDir.appendingPathComponent("\(slug).md"))
             }
             let stamp = Int(Date().timeIntervalSince1970)
             let backup = directoryURL.appendingPathComponent("prompts.json.migrated-\(stamp)")
@@ -191,12 +219,31 @@ public struct LibraryRepository: Sendable {
     }
 
     private func promptFileURLs() -> [URL] {
-        guard let entries = try? FileManager.default.contentsOfDirectory(
-            at: promptsDirectoryURL, includingPropertiesForKeys: nil
+        collectFiles(under: promptsDirectoryURL) { $0.pathExtension == "md" }
+    }
+
+    // Recursive walk collecting regular files that pass `include`. Skips dot-entries.
+    private func collectFiles(under root: URL, include: (URL) -> Bool) -> [URL] {
+        guard let enumerator = FileManager.default.enumerator(
+            at: root, includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
         ) else { return [] }
-        return entries
-            .filter { $0.pathExtension == "md" }
-            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        var urls: [URL] = []
+        for case let url as URL in enumerator {
+            guard (try? url.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true,
+                  include(url) else { continue }
+            urls.append(url)
+        }
+        return urls.sorted { $0.path < $1.path }
+    }
+
+    // The `/`-separated folder path of an item relative to its tree root, or nil at root.
+    static func folderPath(of itemURL: URL, underRoot root: URL) -> String? {
+        let base = root.standardizedFileURL.path
+        let parent = itemURL.deletingLastPathComponent().standardizedFileURL.path
+        guard parent == base || parent.hasPrefix(base + "/") else { return nil }
+        if parent == base { return nil }
+        return String(parent.dropFirst(base.count + 1))
     }
 
     private func existingPromptSlugs() -> Set<String> {
@@ -222,22 +269,19 @@ public struct LibraryRepository: Sendable {
             id: id,
             title: doc.fields["title"] ?? "Untitled",
             content: doc.body,
-            group: doc.fields["group"],
+            group: nil,
             createdAt: created,
             updatedAt: updated
         )
     }
 
     private func writePrompt(_ prompt: Prompt, to url: URL) throws {
-        var fields: [(String, String)] = [
+        let fields: [(String, String)] = [
             ("id", prompt.id.uuidString),
             ("title", prompt.title),
+            ("createdAt", CanonicalJSON.isoString(from: prompt.createdAt)),
+            ("updatedAt", CanonicalJSON.isoString(from: prompt.updatedAt)),
         ]
-        if let group = prompt.group {
-            fields.append(("group", group))
-        }
-        fields.append(("createdAt", CanonicalJSON.isoString(from: prompt.createdAt)))
-        fields.append(("updatedAt", CanonicalJSON.isoString(from: prompt.updatedAt)))
         let text = Frontmatter.render(fields: fields, body: prompt.content)
         do {
             try Data(text.utf8).write(to: url, options: .atomic)
@@ -295,15 +339,20 @@ extension LibraryRepository {
             }
             let declaredName = Frontmatter.parse(text).fields["name"] ?? source.lastPathComponent
             let folderName = Slug.unique(Slug.make(from: declaredName), existing: existingSkillFolderNames())
-            try ensureDirectory(skillsDirectoryURL)
-            let destination = skillFolderURL(name: folderName)
+            // group is a folder destination: copy into skills/<group>/<folderName>/ (nil = root),
+            // mirroring addPrompt(group:). The symlink stays flat (leaf name).
+            let destDir = try folderURL(for: .skill, path: group)
+            try ensureDirectory(destDir)
+            let destination = destDir.appendingPathComponent(folderName)
             do {
                 try FileManager.default.copyItem(at: source, to: destination)
             } catch {
                 throw LibraryRepositoryError.ioFailure(underlying: error)
             }
             let now = Date()
-            try writeSidecar(SkillSidecar(id: UUID(), group: group, createdAt: now, updatedAt: now), in: destination)
+            // Sidecar group stays nil — location is the source of truth (load() derives group
+            // from the folder path); the copied item lives in the folder named by `group`.
+            try writeSidecar(SkillSidecar(id: UUID(), group: nil, createdAt: now, updatedAt: now), in: destination)
             let outcomes = SymlinkManager.link(source: destination, into: syncTargets.all, name: folderName)
             for (directory, outcome) in zip(syncTargets.all, outcomes) where outcome.conflicted {
                 logWarning("skill \"\(folderName)\" not linked: \(directory.appendingPathComponent(folderName).path) already exists and isn't ours")
@@ -315,22 +364,21 @@ extension LibraryRepository {
         }
     }
 
+    /// Moves the skill into the `group` folder (nil = root) — the same relocation
+    /// `moveSkill(id:toFolder:)` performs — and re-reads it from the new location.
     @discardableResult
     public func updateSkillGroup(id: UUID, group: String?) throws -> Skill {
         try withExclusiveLock {
             guard let found = try findSkillFolder(id: id) else {
                 throw LibraryRepositoryError.skillNotFound(id)
             }
-            var sidecar = readSidecar(in: found.url) ?? SkillSidecar(
-                id: found.skill.id, group: nil,
-                createdAt: found.skill.createdAt, updatedAt: found.skill.updatedAt
-            )
-            sidecar.group = group
-            sidecar.updatedAt = Date()
-            try writeSidecar(sidecar, in: found.url)
-            guard let skill = readSkill(at: found.url) else {
+            let newURL = try relocateSkillFolder(at: found.url, toFolder: group)
+            guard var skill = readSkill(at: newURL) else {
                 throw LibraryRepositoryError.skillNotFound(id)
             }
+            // readSkill hardcodes group nil (location is truth); echo where it landed,
+            // matching updatePrompt so callers see the destination folder.
+            skill.group = Self.folderPath(of: newURL, underRoot: skillsDirectoryURL)
             return skill
         }
     }
@@ -372,13 +420,27 @@ extension LibraryRepository {
         skillsDirectoryURL.appendingPathComponent(name)
     }
 
+    // A skill folder is any directory that DIRECTLY contains SKILL.md. We record it
+    // and do not descend (its subdirs are supporting files, not nested skills).
     func skillFolderURLs() -> [URL] {
-        guard let entries = try? FileManager.default.contentsOfDirectory(
-            at: skillsDirectoryURL, includingPropertiesForKeys: [.isDirectoryKey]
-        ) else { return [] }
-        return entries
-            .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true }
-            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        var results: [URL] = []
+        func walk(_ dir: URL) {
+            guard let entries = try? FileManager.default.contentsOfDirectory(
+                at: dir, includingPropertiesForKeys: [.isDirectoryKey]
+            ) else { return }
+            for entry in entries {
+                guard !entry.lastPathComponent.hasPrefix("."),
+                      (try? entry.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true
+                else { continue }
+                if FileManager.default.fileExists(atPath: entry.appendingPathComponent("SKILL.md").path) {
+                    results.append(entry)
+                } else {
+                    walk(entry)
+                }
+            }
+        }
+        walk(skillsDirectoryURL)
+        return results.sorted { $0.path < $1.path }
     }
 
     func existingSkillFolderNames() -> Set<String> {
@@ -404,7 +466,9 @@ extension LibraryRepository {
             id: sidecar?.id ?? Self.stableSkillID(forName: folderURL.lastPathComponent),
             name: doc.fields["name"] ?? folderURL.lastPathComponent,
             description: doc.fields["description"] ?? "",
-            group: sidecar?.group,
+            // Group is location-derived (set by load() from the folder path). A stale
+            // sidecar group must never shadow an item's real folder, so ignore it here.
+            group: nil,
             body: doc.body,
             files: supportingFiles(in: folderURL),
             createdAt: created,

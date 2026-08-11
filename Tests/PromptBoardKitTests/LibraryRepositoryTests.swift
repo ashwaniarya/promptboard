@@ -28,10 +28,10 @@ struct LibraryRepositoryTests {
 
         let prompt = try repository.addPrompt(title: "Code Review", content: "Review the diff", group: "Coding")
 
-        let fileURL = promptsDir(directory).appendingPathComponent("code-review.md")
+        let fileURL = promptsDir(directory).appendingPathComponent("Coding/code-review.md")
         let text = try String(contentsOf: fileURL, encoding: .utf8)
         #expect(text.contains("title: Code Review"))
-        #expect(text.contains("group: Coding"))
+        #expect(!text.contains("group:"))
         #expect(text.contains("Review the diff"))
 
         let load = try repository.load()
@@ -137,5 +137,24 @@ struct LibraryRepositoryTests {
         #expect(entries.contains { $0.hasPrefix("prompts.json.migrated-") })
 
         #expect(try repository.migrateLegacyIfNeeded() == false)
+    }
+
+    @Test func legacyMigrationPreservesGroupAsAFolder() throws {
+        let directory = temporaryDirectory()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let legacy = [Prompt(title: "Grouped One", content: "a", group: "Legacy")]
+        try CanonicalJSON.makeEncoder().encode(legacy)
+            .write(to: directory.appendingPathComponent("prompts.json"))
+        let repository = LibraryRepository(directoryURL: directory, syncTargets: .temporary())
+
+        #expect(try repository.migrateLegacyIfNeeded() == true)
+
+        // The legacy `group` label must survive as a folder: writePrompt drops the group
+        // frontmatter key, so a root write would lose it. The file lands in prompts/Legacy/.
+        #expect(FileManager.default.fileExists(
+            atPath: promptsDir(directory).appendingPathComponent("Legacy/grouped-one.md").path))
+        let loaded = try repository.load().items.first
+        #expect(loaded?.group == "Legacy")
+        #expect(loaded?.title == "Grouped One")
     }
 }

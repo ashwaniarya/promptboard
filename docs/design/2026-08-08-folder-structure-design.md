@@ -1,6 +1,6 @@
 # Design — Nested Folders (Layer F)
 
-Status: approved 2026-08-08 · Scope: Layer F (organization)
+Status: implemented 2026-08-11 · Scope: Layer F (organization) · Plan: docs/plans/2026-08-08-folder-structure.md
 
 ## Why
 

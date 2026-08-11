@@ -29,18 +29,33 @@ PromptBoard syncs your prompts and skills to every agent CLI on the machine — 
 
 > Claude Code is confirmed to load symlinked skills (this is how it already picks up `~/.claude/skills` links). Cursor and OpenCode read the same directories via standard globbing, which is symlink-transparent; if a future tool version filters symlinks, the sync layer can mirror real copies into that one tool's dir.
 
+## Folders
+
+Organize prompts and skills into **nested folders** — real directories, not tags. The sidebar is a tree you can expand and collapse; selecting a folder shows its items **and everything in its subfolders** (Finder-style).
+
+- **A folder is a directory.** An item's folder is wherever its file/folder lives under `prompts/` or `skills/` — there's no stored `group` field anymore; the folder is derived from location. Root-level items stay at the top, ungrouped.
+- **Move by dragging** a card onto a folder row (or onto **All** to un-folder it). Create a folder with the **+** in the sidebar's GROUPS header; a freshly created empty folder shows right away.
+- **Deleting a folder never deletes its contents** — the items move up to the parent. Renaming a folder moves everything inside it with it.
+- **`group` means "folder" everywhere it's set.** In the CLI/MCP, `add --group Work/ClientA` files a prompt into `prompts/Work/ClientA/`, and `update --group`, `import-skill --group`, and `update-skill-group` move the item into that folder. In the editor/convert sheets, the "group" field does the same.
+- **Cross-tool sync is unaffected.** Skills sync by their flat leaf name regardless of how deep they're nested — a skill in `skills/Work/logo-export/` still shows up as `/logo-export` in every tool. Your old flat groups migrate to top-level folders once, automatically, on first launch.
+
 ## Library layout
 
 Everything lives as human-readable files under `~/Library/Application Support/PromptBoard/Library/`:
 
 ```
 Library/
-├── prompts/<slug>.md      # frontmatter (id, title, group, dates) + markdown body
-└── skills/<name>/         # an Agent Skill: spec-pure SKILL.md + supporting files
-    ├── SKILL.md           #   name + description + body (PromptBoard adds nothing here)
-    └── .promptboard.json  #   sidecar: id, group, timestamps
+├── prompts/
+│   ├── <slug>.md              # frontmatter (id, title, dates) + markdown body
+│   └── Work/ClientA/<slug>.md #   nested = filed under the "Work/ClientA" folder
+└── skills/
+    ├── <name>/                # an Agent Skill: spec-pure SKILL.md + supporting files
+    │   ├── SKILL.md           #   name + description + body (PromptBoard adds nothing here)
+    │   └── .promptboard.json  #   sidecar: id, timestamps
+    └── Brand/<name>/          #   nested = filed under the "Brand" folder
 ```
 
+- **The folder is the truth** — an item's `group` is derived from where its file lives, not stored in frontmatter or the sidecar. Move the file (by hand or by drag) and its folder changes.
 - **Files are the source of truth** — no central index. Add, edit, or drop in items by hand and the app live-reloads them.
 - Each skill is **symlinked into `~/.claude/skills/<name>`** so Claude Code can use it directly; PromptBoard never overwrites a path it didn't create.
 - **Skills are authored in-app** — the skill editor edits `SKILL.md` (name / description / body) and manages supporting files (create, rename, delete, import from disk); renaming a skill renames its folder and re-points the symlink, skipping (with a warning) any foreign `~/.claude/skills` name. Metadata and file text commit on **Save**; file add/rename/delete apply immediately.
