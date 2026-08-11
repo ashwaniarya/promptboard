@@ -8,8 +8,12 @@ extension LibraryRepository {
     public func createSkill(name: String, description: String, group: String?, body: String) throws -> Skill {
         try withExclusiveLock {
             let folderName = Slug.unique(Slug.make(from: name), existing: existingSkillFolderNames())
-            try ensureDirectory(skillsDirectoryURL)
-            let destination = skillFolderURL(name: folderName)
+            // group is a folder destination: file into skills/<group>/<folderName>/ (nil = root),
+            // mirroring addPrompt(group:). The symlink stays flat (leaf name); sidecar group
+            // stays nil since location is truth (load() derives group from the folder path).
+            let destDir = try folderURL(for: .skill, path: group)
+            try ensureDirectory(destDir)
+            let destination = destDir.appendingPathComponent(folderName)
             try ensureDirectory(destination)
             try writeSkillMarkdown(name: folderName, description: description, body: body, in: destination)
             let now = Date()
@@ -33,8 +37,10 @@ extension LibraryRepository {
                 throw LibraryRepositoryError.promptNotFound(promptID)
             }
             let folderName = Slug.unique(Slug.make(from: name), existing: existingSkillFolderNames())
-            try ensureDirectory(skillsDirectoryURL)
-            let destination = skillFolderURL(name: folderName)
+            // group is a folder destination — file into skills/<group>/ (nil = root), as createSkill does.
+            let destDir = try folderURL(for: .skill, path: group)
+            try ensureDirectory(destDir)
+            let destination = destDir.appendingPathComponent(folderName)
             try ensureDirectory(destination)
             try writeSkillMarkdown(name: folderName, description: description, body: found.prompt.content, in: destination)
             let now = Date()
@@ -81,7 +87,12 @@ extension LibraryRepository {
                 updatedAt: Date()
             ), in: folderURL)
 
-            guard let skill = readSkill(at: folderURL) else {
+            // Honour a group change on save: move the (possibly renamed) folder into the
+            // `group` folder (nil = root). renameSkillFolder above targets the skills ROOT,
+            // so a renamed-in-subfolder skill sits at root here; this pulls it into `group`.
+            let relocated = try relocateSkillFolder(at: folderURL, toFolder: group, name: effectiveName)
+
+            guard let skill = readSkill(at: relocated) else {
                 throw LibraryRepositoryError.skillNotFound(id)
             }
             return skill

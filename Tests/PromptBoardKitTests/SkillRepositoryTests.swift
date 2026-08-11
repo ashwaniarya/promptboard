@@ -47,11 +47,12 @@ struct SkillRepositoryTests {
         let skill = try repository.importSkill(fromDirectory: source, group: "Tools")
 
         #expect(skill.name == "demo-skill")
-        // Group is location-derived now; a skill imported to the skills root has group nil.
+        // The returned Skill's group is always nil (location is truth, seen via load()); the
+        // `group: "Tools"` argument files the copy into skills/Tools/.
         #expect(skill.group == nil)
         #expect(skill.files.map(\.relativePath) == ["reference.md"])
 
-        let skillFolder = directory.appendingPathComponent("Library/skills/demo-skill")
+        let skillFolder = directory.appendingPathComponent("Library/skills/Tools/demo-skill")
         #expect(FileManager.default.fileExists(atPath: skillFolder.appendingPathComponent("SKILL.md").path))
         #expect(FileManager.default.fileExists(atPath: skillFolder.appendingPathComponent(".promptboard.json").path))
 
@@ -120,7 +121,7 @@ struct SkillRepositoryTests {
         #expect(first.first?.id == second.first?.id)
     }
 
-    @Test func updateSkillGroupIsLocationDerivedNoOpKeepingID() throws {
+    @Test func updateSkillGroupMovesTheSkillIntoTheGroupFolderKeepingID() throws {
         let directory = temporaryDirectory()
         let claudeSkills = temporaryDirectory()
         let source = try makeSourceSkill(name: "demo-skill", description: "d")
@@ -129,16 +130,17 @@ struct SkillRepositoryTests {
             syncTargets: targets(claude: claudeSkills)
         )
         let skill = try repository.importSkill(fromDirectory: source, group: nil)
-        #expect(skill.group == nil)
 
-        // Grouping moved from the sidecar to the folder location, so updateSkillGroup no
-        // longer changes the group — it stays nil for a skill at the skills root — while
-        // still preserving the skill's identity.
+        // updateSkillGroup now performs a real folder move (like moveSkill): the skill lands
+        // in skills/Research/ and load() derives its group from that location. The returned
+        // Skill's group stays nil (readSkill is location-agnostic); the id is preserved.
         let moved = try repository.updateSkillGroup(id: skill.id, group: "Research")
-        #expect(moved.group == nil)
         #expect(moved.id == skill.id)
 
+        #expect(FileManager.default.fileExists(atPath: directory.appendingPathComponent("Library/skills/Research/demo-skill/SKILL.md").path))
         let reloaded = try repository.load().items.first { $0.kind == .skill }
-        #expect(reloaded?.group == nil)
+        #expect(reloaded?.group == "Research")
+        #expect(SymlinkManager.resolvedDestination(of: claudeSkills.appendingPathComponent("demo-skill"))?.path
+                == directory.appendingPathComponent("Library/skills/Research/demo-skill").standardizedFileURL.path)
     }
 }

@@ -144,20 +144,7 @@ extension LibraryRepository {
             guard let found = try findPromptFile(id: id) else {
                 throw LibraryRepositoryError.promptNotFound(id)
             }
-            let destDir = try folderURL(for: .prompt, path: folder)
-            // Already there → no-op. Both sides are directory URLs, so standardizedFileURL
-            // (which does NOT normalize a trailing slash) compares them correctly; keep
-            // destDir built with isDirectory:true and compare the file's parent, not the file.
-            if found.url.deletingLastPathComponent().standardizedFileURL == destDir.standardizedFileURL {
-                return
-            }
-            try ensureDirectory(destDir)
-            let destination = uniqueDestination(for: found.url.lastPathComponent, in: destDir)
-            do {
-                try FileManager.default.moveItem(at: found.url, to: destination)
-            } catch {
-                throw LibraryRepositoryError.ioFailure(underlying: error)
-            }
+            _ = try relocatePromptFile(at: found.url, toFolder: folder)
         }
     }
 
@@ -166,30 +153,49 @@ extension LibraryRepository {
             guard let found = try findSkillFolder(id: id) else {
                 throw LibraryRepositoryError.skillNotFound(id)
             }
-            let name = found.url.lastPathComponent
-            let destDir = try folderURL(for: .skill, path: folder)
-            // Already there → no-op (return BEFORE unlink so the symlink is untouched).
-            // Both sides are directory URLs; standardizedFileURL doesn't normalize a
-            // trailing slash, so keep destDir built with isDirectory:true for this compare.
-            if found.url.deletingLastPathComponent().standardizedFileURL == destDir.standardizedFileURL {
-                return
-            }
-            try ensureDirectory(destDir)
-            let destination = destDir.appendingPathComponent(name)
-            // A skill's leaf folder name IS its flat symlink identity / slash-command
-            // name — never auto-suffix it (unlike a prompt file); refuse the collision.
-            guard !FileManager.default.fileExists(atPath: destination.path) else {
-                throw LibraryRepositoryError.skillLinkConflict(name: name, path: destination.path)
-            }
-            SymlinkManager.unlink(name: name, from: syncTargets.all, expectedTarget: found.url)
-            do {
-                try FileManager.default.moveItem(at: found.url, to: destination)
-            } catch {
-                linkSkill(at: found.url, name: name)
-                throw LibraryRepositoryError.ioFailure(underlying: error)
-            }
-            linkSkill(at: destination, name: name)
+            _ = try relocateSkillFolder(at: found.url, toFolder: folder, name: found.url.lastPathComponent)
         }
+    }
+
+    // Lock-free: caller must hold the exclusive lock. Relocates a prompt file into `folder`
+    // (nil = root). Same-folder → no-op. Returns the (possibly unchanged) new file URL.
+    func relocatePromptFile(at currentURL: URL, toFolder folder: String?) throws -> URL {
+        let destDir = try folderURL(for: .prompt, path: folder)
+        // Already there → no-op. Both sides are directory URLs, so standardizedFileURL
+        // (which does NOT normalize a trailing slash) compares them correctly; keep
+        // destDir built with isDirectory:true and compare the file's parent, not the file.
+        if currentURL.deletingLastPathComponent().standardizedFileURL == destDir.standardizedFileURL {
+            return currentURL
+        }
+        try ensureDirectory(destDir)
+        let destination = uniqueDestination(for: currentURL.lastPathComponent, in: destDir)
+        do { try FileManager.default.moveItem(at: currentURL, to: destination) }
+        catch { throw LibraryRepositoryError.ioFailure(underlying: error) }
+        return destination
+    }
+
+    // Lock-free: caller must hold the lock. Relocates a skill folder into `folder` (nil = root),
+    // repointing its symlink. Same-folder → no-op. Refuses (never suffixes) a destination clash.
+    func relocateSkillFolder(at currentURL: URL, toFolder folder: String?, name: String) throws -> URL {
+        let destDir = try folderURL(for: .skill, path: folder)
+        // Already there → no-op (return BEFORE unlink so the symlink is untouched).
+        // Both sides are directory URLs; standardizedFileURL doesn't normalize a
+        // trailing slash, so keep destDir built with isDirectory:true for this compare.
+        if currentURL.deletingLastPathComponent().standardizedFileURL == destDir.standardizedFileURL {
+            return currentURL
+        }
+        try ensureDirectory(destDir)
+        let destination = destDir.appendingPathComponent(name)
+        // A skill's leaf folder name IS its flat symlink identity / slash-command
+        // name — never auto-suffix it (unlike a prompt file); refuse the collision.
+        guard !FileManager.default.fileExists(atPath: destination.path) else {
+            throw LibraryRepositoryError.skillLinkConflict(name: name, path: destination.path)
+        }
+        SymlinkManager.unlink(name: name, from: syncTargets.all, expectedTarget: currentURL)
+        do { try FileManager.default.moveItem(at: currentURL, to: destination) }
+        catch { linkSkill(at: currentURL, name: name); throw LibraryRepositoryError.ioFailure(underlying: error) }
+        linkSkill(at: destination, name: name)
+        return destination
     }
 
     // Appends a numeric suffix if a same-named entry already exists in `directory`.

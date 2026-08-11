@@ -226,6 +226,119 @@ struct FolderStructureTests {
         }
     }
 
+    // MARK: - Authoring into a group folder (F8)
+
+    @Test func createSkillFilesIntoTheGivenFolder() throws {
+        let repo = tempLibrary()
+        let skill = try repo.createSkill(name: "Logo Export", description: "d", group: "Brand", body: "b")
+
+        #expect(FileManager.default.fileExists(atPath: repo.skillsDirectoryURL.appendingPathComponent("Brand/logo-export/SKILL.md").path))
+        let reloaded = try repo.load().items.first { $0.id == skill.id }
+        #expect(reloaded?.group == "Brand")
+        for dir in repo.syncTargets.all {
+            #expect(SymlinkManager.resolvedDestination(of: dir.appendingPathComponent("logo-export"))?.path
+                    == repo.skillsDirectoryURL.appendingPathComponent("Brand/logo-export").standardizedFileURL.path)
+        }
+    }
+
+    @Test func promotePromptToSkillFilesIntoTheGivenFolder() throws {
+        let repo = tempLibrary()
+        let prompt = try repo.addPrompt(title: "Logo Export", content: "the body")
+        let skill = try repo.promotePromptToSkill(
+            promptID: prompt.id, name: "Logo Export", description: "d", group: "Brand", removingPrompt: true
+        )
+
+        #expect(FileManager.default.fileExists(atPath: repo.skillsDirectoryURL.appendingPathComponent("Brand/logo-export/SKILL.md").path))
+        let reloaded = try repo.load().items.first { $0.id == skill.id }
+        #expect(reloaded?.group == "Brand")
+        for dir in repo.syncTargets.all {
+            #expect(SymlinkManager.resolvedDestination(of: dir.appendingPathComponent("logo-export"))?.path
+                    == repo.skillsDirectoryURL.appendingPathComponent("Brand/logo-export").standardizedFileURL.path)
+        }
+    }
+
+    @Test func importSkillFilesIntoTheGivenFolder() throws {
+        let repo = tempLibrary()
+        let source = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent("ImportSource-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: source, withIntermediateDirectories: true)
+        try "---\nname: logo-export\ndescription: d\n---\nbody"
+            .write(to: source.appendingPathComponent("SKILL.md"), atomically: true, encoding: .utf8)
+
+        let skill = try repo.importSkill(fromDirectory: source, group: "Brand")
+
+        #expect(FileManager.default.fileExists(atPath: repo.skillsDirectoryURL.appendingPathComponent("Brand/logo-export/SKILL.md").path))
+        let reloaded = try repo.load().items.first { $0.id == skill.id }
+        #expect(reloaded?.group == "Brand")
+        for dir in repo.syncTargets.all {
+            #expect(SymlinkManager.resolvedDestination(of: dir.appendingPathComponent("logo-export"))?.path
+                    == repo.skillsDirectoryURL.appendingPathComponent("Brand/logo-export").standardizedFileURL.path)
+        }
+    }
+
+    @Test func updateSkillMovesItIntoTheNewGroupFolderKeepingID() throws {
+        let repo = tempLibrary()
+        let skill = try repo.createSkill(name: "Logo Export", description: "d", group: "A", body: "b")
+        let updated = try repo.updateSkill(id: skill.id, name: "Logo Export", description: "d2", group: "B", body: "b2")
+
+        #expect(updated.id == skill.id)
+        #expect(FileManager.default.fileExists(atPath: repo.skillsDirectoryURL.appendingPathComponent("B/logo-export/SKILL.md").path))
+        #expect(!FileManager.default.fileExists(atPath: repo.skillsDirectoryURL.appendingPathComponent("A/logo-export").path))
+        let reloaded = try repo.load().items.first { $0.id == skill.id }
+        #expect(reloaded?.group == "B")
+        for dir in repo.syncTargets.all {
+            #expect(SymlinkManager.resolvedDestination(of: dir.appendingPathComponent("logo-export"))?.path
+                    == repo.skillsDirectoryURL.appendingPathComponent("B/logo-export").standardizedFileURL.path)
+        }
+    }
+
+    // The composition subtlety: renameSkillFolder always targets the skills ROOT, so a
+    // renamed-in-subfolder skill momentarily lands at root before the group relocate pulls
+    // it into the folder. Both ops fix the symlink; assert it never strands at root.
+    @Test func updateSkillRenamesAndMovesInOneSaveKeepingID() throws {
+        let repo = tempLibrary()
+        let skill = try repo.createSkill(name: "Old Name", description: "d", group: "A", body: "b")
+        let updated = try repo.updateSkill(id: skill.id, name: "New Name", description: "d", group: "B", body: "b")
+
+        #expect(updated.id == skill.id)
+        #expect(updated.name == "new-name")
+        #expect(FileManager.default.fileExists(atPath: repo.skillsDirectoryURL.appendingPathComponent("B/new-name/SKILL.md").path))
+        #expect(!FileManager.default.fileExists(atPath: repo.skillsDirectoryURL.appendingPathComponent("A/old-name").path))
+        #expect(!FileManager.default.fileExists(atPath: repo.skillsDirectoryURL.appendingPathComponent("new-name").path))
+        let reloaded = try repo.load().items.first { $0.id == skill.id }
+        #expect(reloaded?.group == "B")
+        for dir in repo.syncTargets.all {
+            #expect(SymlinkManager.resolvedDestination(of: dir.appendingPathComponent("new-name"))?.path
+                    == repo.skillsDirectoryURL.appendingPathComponent("B/new-name").standardizedFileURL.path)
+            #expect(SymlinkManager.resolvedDestination(of: dir.appendingPathComponent("old-name")) == nil)
+        }
+    }
+
+    @Test func updatePromptWithAGroupMovesTheFileKeepingID() throws {
+        let repo = tempLibrary()
+        let prompt = try repo.addPrompt(title: "Deploy Notes", content: "b")
+        let updated = try repo.updatePrompt(id: prompt.id, title: nil, content: nil, group: "Work")
+
+        #expect(updated.id == prompt.id)
+        #expect(updated.group == "Work")
+        #expect(FileManager.default.fileExists(atPath: repo.promptsDirectoryURL.appendingPathComponent("Work/deploy-notes.md").path))
+        #expect(!FileManager.default.fileExists(atPath: repo.promptsDirectoryURL.appendingPathComponent("deploy-notes.md").path))
+        let reloaded = try repo.load().items.first { $0.id == prompt.id }
+        #expect(reloaded?.group == "Work")
+    }
+
+    @Test func updatePromptWithNilGroupRenamesButDoesNotMoveTheFile() throws {
+        let repo = tempLibrary()
+        let prompt = try repo.addPrompt(title: "Deploy Notes", content: "b", group: "Ops")
+        let updated = try repo.updatePrompt(id: prompt.id, title: "New Title", content: nil, group: nil)
+
+        #expect(updated.title == "New Title")
+        #expect(FileManager.default.fileExists(atPath: repo.promptsDirectoryURL.appendingPathComponent("Ops/deploy-notes.md").path))
+        let reloaded = try repo.load().items.first { $0.id == prompt.id }
+        #expect(reloaded?.group == "Ops")
+        #expect(reloaded?.title == "New Title")
+    }
+
     @Test func migrationMovesFlatGroupedItemsIntoFoldersAndLeavesUngroupedAtRoot() throws {
         let repo = tempLibrary()
         try repo.ensureLibraryDirectories()

@@ -87,7 +87,8 @@ public struct LibraryRepository: Sendable {
         }
     }
 
-    // group == nil keeps the existing group; clearing a group is deferred to Layer B.
+    // group == nil leaves the folder unchanged (the CLI/MCP omitted-field contract). A
+    // non-nil group is a folder destination and moves the file into it ("" == root).
     @discardableResult
     public func updatePrompt(id: UUID, title: String?, content: String?, group: String? = nil) throws -> Prompt {
         guard title != nil || content != nil || group != nil else {
@@ -103,6 +104,11 @@ public struct LibraryRepository: Sendable {
             if let group { prompt.group = group }
             prompt.updatedAt = Date()
             try writePrompt(prompt, to: found.url)
+            // A supplied group is a folder move; nil leaves the file where it is. The returned
+            // Prompt echoes `group` so a CLI/MCP `update --group` reports the destination folder.
+            if group != nil {
+                _ = try relocatePromptFile(at: found.url, toFolder: group)
+            }
             return prompt
         }
     }
@@ -154,7 +160,12 @@ public struct LibraryRepository: Sendable {
             for prompt in prompts {
                 let slug = Slug.unique(Slug.make(from: prompt.title), existing: used)
                 used.insert(slug)
-                try writePrompt(prompt, to: promptsDirectoryURL.appendingPathComponent("\(slug).md"))
+                // A legacy prompt's `group` is a folder destination now: file it straight into
+                // prompts/<group>/ (bad/absent group → root, don't abort). writePrompt drops the
+                // group frontmatter key, so writing at root would lose the label — location is truth.
+                let destDir = (try? folderURL(for: .prompt, path: prompt.group)) ?? promptsDirectoryURL
+                try ensureDirectory(destDir)
+                try writePrompt(prompt, to: destDir.appendingPathComponent("\(slug).md"))
             }
             let stamp = Int(Date().timeIntervalSince1970)
             let backup = directoryURL.appendingPathComponent("prompts.json.migrated-\(stamp)")
@@ -317,17 +328,20 @@ extension LibraryRepository {
             }
             let declaredName = Frontmatter.parse(text).fields["name"] ?? source.lastPathComponent
             let folderName = Slug.unique(Slug.make(from: declaredName), existing: existingSkillFolderNames())
-            try ensureDirectory(skillsDirectoryURL)
-            let destination = skillFolderURL(name: folderName)
+            // group is a folder destination: copy into skills/<group>/<folderName>/ (nil = root),
+            // mirroring addPrompt(group:). The symlink stays flat (leaf name).
+            let destDir = try folderURL(for: .skill, path: group)
+            try ensureDirectory(destDir)
+            let destination = destDir.appendingPathComponent(folderName)
             do {
                 try FileManager.default.copyItem(at: source, to: destination)
             } catch {
                 throw LibraryRepositoryError.ioFailure(underlying: error)
             }
             let now = Date()
-            // Legacy exception: this sidecar `group` is read only by the one-time F4
-            // migration; group is otherwise location-derived. Folder-aware import is a later task.
-            try writeSidecar(SkillSidecar(id: UUID(), group: group, createdAt: now, updatedAt: now), in: destination)
+            // Sidecar group stays nil — location is the source of truth (load() derives group
+            // from the folder path); the copied item lives in the folder named by `group`.
+            try writeSidecar(SkillSidecar(id: UUID(), group: nil, createdAt: now, updatedAt: now), in: destination)
             let outcomes = SymlinkManager.link(source: destination, into: syncTargets.all, name: folderName)
             for (directory, outcome) in zip(syncTargets.all, outcomes) where outcome.conflicted {
                 logWarning("skill \"\(folderName)\" not linked: \(directory.appendingPathComponent(folderName).path) already exists and isn't ours")
@@ -339,26 +353,18 @@ extension LibraryRepository {
         }
     }
 
-    /// Group is now derived from an item's folder location, so this method no longer
-    /// changes a skill's grouping on reload (it always writes `group: nil` to the
-    /// sidecar). To change a skill's folder use `moveSkill(id:toFolder:)`. This method
-    /// is retained only for CLI/MCP source compatibility and will be rewired or removed
-    /// in a later task.
+    /// Moves the skill into the `group` folder (nil = root) — the same relocation
+    /// `moveSkill(id:toFolder:)` performs — and re-reads it from the new location.
     @discardableResult
     public func updateSkillGroup(id: UUID, group: String?) throws -> Skill {
         try withExclusiveLock {
             guard let found = try findSkillFolder(id: id) else {
                 throw LibraryRepositoryError.skillNotFound(id)
             }
-            var sidecar = readSidecar(in: found.url) ?? SkillSidecar(
-                id: found.skill.id, group: nil,
-                createdAt: found.skill.createdAt, updatedAt: found.skill.updatedAt
+            let newURL = try relocateSkillFolder(
+                at: found.url, toFolder: group, name: found.url.lastPathComponent
             )
-            // note: group is now location-derived; this write no longer affects reload.
-            sidecar.group = nil
-            sidecar.updatedAt = Date()
-            try writeSidecar(sidecar, in: found.url)
-            guard let skill = readSkill(at: found.url) else {
+            guard let skill = readSkill(at: newURL) else {
                 throw LibraryRepositoryError.skillNotFound(id)
             }
             return skill

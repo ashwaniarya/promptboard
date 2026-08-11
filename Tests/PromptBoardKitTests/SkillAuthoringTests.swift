@@ -27,11 +27,12 @@ struct SkillAuthoringTests {
 
         #expect(skill.name == "deploy-runbook")
         #expect(skill.description == "Steps to deploy")
-        // Group is location-derived now; a skill authored at the skills root has group nil.
+        // The returned Skill's group is always nil (readSkill hardcodes it; location is truth,
+        // seen via load()). The `group: "Ops"` argument files the skill into skills/Ops/.
         #expect(skill.group == nil)
         #expect(skill.body == "# Deploy")
 
-        let folder = directory.appendingPathComponent("Library/skills/deploy-runbook")
+        let folder = directory.appendingPathComponent("Library/skills/Ops/deploy-runbook")
         let markdown = try String(contentsOf: folder.appendingPathComponent("SKILL.md"), encoding: .utf8)
         #expect(markdown.contains("name: deploy-runbook"))
         #expect(markdown.contains("description: Steps to deploy"))
