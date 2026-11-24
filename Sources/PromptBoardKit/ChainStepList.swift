@@ -53,6 +53,10 @@ public struct ChainStepList: Equatable, Sendable {
         if let previous = readyIndices.last(where: { $0 < selectedIndex }) { self.selectedIndex = previous }
     }
 
+    public mutating func select(_ index: Int) {
+        if readyIndices.contains(index) { selectedIndex = index }
+    }
+
     public func activate() -> Activation {
         if isEmpty { return .nothing }
         guard let selectedIndex, case .ready(_, let text) = rows[selectedIndex] else { return .restart }

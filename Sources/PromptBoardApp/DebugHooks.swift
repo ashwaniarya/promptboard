@@ -26,6 +26,7 @@ enum DebugHooks {
     static let createFolderNotification = "com.arya.PromptBoard.debug.createFolder"
     static let moveFirstItemNotification = "com.arya.PromptBoard.debug.moveFirstItem"
     static let dumpFolderTreeNotification = "com.arya.PromptBoard.debug.dumpFolderTree"
+    static let chainPickNotification = "com.arya.PromptBoard.debug.chainPick"
 
     static var isEnabled: Bool {
         ProcessInfo.processInfo.environment["PROMPTBOARD_DEBUG"] == "1"
@@ -67,6 +68,7 @@ enum DebugHooks {
             (createFolderNotification, #selector(DebugHookTarget.handleCreateFolder(_:))),
             (moveFirstItemNotification, #selector(DebugHookTarget.handleMoveFirstItem(_:))),
             (dumpFolderTreeNotification, #selector(DebugHookTarget.handleDumpFolderTree(_:))),
+            (chainPickNotification, #selector(DebugHookTarget.handleChainPick(_:))),
         ]
         for (name, selector) in hooks {
             center.addObserver(
@@ -217,7 +219,7 @@ private final class DebugHookTarget: NSObject {
             quickInsertController.trigger()
             if let query { quickInsertController.model.query = query }
             let results = quickInsertController.model.results
-            NSLog("%@", "PromptBoardDebug quickInsert query=\(query ?? "") results=\(results.count): \(results.map(\.title).joined(separator: " | "))")
+            NSLog("%@", "PromptBoardDebug quickInsert query=\(query ?? "") results=\(results.count): \(results.map { "\($0.title) [\($0.kind.rawValue)]" }.joined(separator: " | "))")
         }
     }
 
@@ -225,6 +227,16 @@ private final class DebugHookTarget: NSObject {
         let query = notification.object as? String ?? ""
         MainActor.assumeIsolated {
             quickInsertController.debugInsertFirst(query: query)
+        }
+    }
+
+    @objc nonisolated func handleChainPick(_ notification: Notification) {
+        let argument = notification.object as? String ?? ""
+        let parts = argument.split(separator: "|", maxSplits: 1).map(String.init)
+        let query = parts.first ?? ""
+        let step = parts.count > 1 ? Int(parts[1]) ?? 0 : 0
+        MainActor.assumeIsolated {
+            quickInsertController.debugPickStep(query: query, step: step)
         }
     }
 

@@ -63,11 +63,11 @@ struct PromptFilterTests {
 
     // MARK: - quickInsertResults (Layer D ranking)
 
-    private let insertPrompts = [
+    private let insertPrompts: [LibraryEntry] = [
         Prompt(title: "Rewrite Professionally", content: "Keep it professional and do a final review"),
         Prompt(title: "Code Review", content: "Review this code for bugs"),
         Prompt(title: "Product Launch", content: "Plan the launch"),
-    ]
+    ].map(LibraryEntry.prompt)
 
     @Test func quickInsertEmptyQueryReturnsAllInOrder() {
         let result = PromptFilter.quickInsertResults(insertPrompts, query: "  ")

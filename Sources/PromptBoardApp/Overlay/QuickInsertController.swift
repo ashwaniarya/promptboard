@@ -32,8 +32,7 @@ final class QuickInsertController {
         panel?.orderOut(nil)
     }
 
-    private func insert(_ prompt: Prompt) {
-        let text = prompt.content
+    private func insert(_ text: String) {
         hide()
         // Let focus return to the previously-active app before pasting.
         Task { @MainActor [weak self] in
@@ -47,12 +46,45 @@ final class QuickInsertController {
     func debugInsertFirst(query: String) {
         model.query = query
         model.selectedIndex = 0
-        guard let prompt = model.selected else {
+        guard let entry = model.selected else {
             NSLog("%@", "PromptBoardDebug debugInsertFirst: no result for \(query)")
             return
         }
-        NSLog("%@", "PromptBoardDebug debugInsertFirst inserting: \(prompt.title)")
-        performInsert(prompt.content)
+        debugActivate(step: nil, label: "debugInsertFirst inserting: \(entry.title) kind=\(entry.kind.rawValue)")
+    }
+
+    // Debug-only: open the first chain for a query and pick step `step` (0-based),
+    // as an arrow-key pick would. A finished chain is restarted, as Enter on "done" is.
+    func debugPickStep(query: String, step: Int) {
+        model.query = query
+        model.selectedIndex = 0
+        guard let entry = model.selected, case .chain(let chain) = entry else {
+            NSLog("%@", "PromptBoardDebug chainPick: no chain for \(query)")
+            return
+        }
+        debugActivate(step: step, label: "chainPick chain=\(chain.title)")
+    }
+
+    private func debugActivate(step: Int?, label: String) {
+        if let text = model.activate() {
+            NSLog("%@", "PromptBoardDebug \(label)")
+            performInsert(text)
+            return
+        }
+        guard let stepList = model.stepList else {
+            NSLog("%@", "PromptBoardDebug \(label) nothing to paste")
+            return
+        }
+        if let step, !stepList.isDone { model.selectStep(step) }
+        let peek = model.stepList?.activate()
+        guard let text = model.activate(), case .paste(_, let nextIndex)? = peek else {
+            NSLog("%@", "PromptBoardDebug \(label) done -> restart")
+            model.closeStepList()
+            return
+        }
+        model.closeStepList()
+        NSLog("%@", "PromptBoardDebug \(label) pasted=\(text.prefix(40)) next=\(nextIndex)")
+        performInsert(text)
     }
 
     // Paste at the caret when trusted; otherwise copy to the clipboard and prompt
@@ -68,9 +100,8 @@ final class QuickInsertController {
         }
     }
 
-    private func insertSelected() {
-        guard let prompt = model.selected else { return }
-        insert(prompt)
+    private func activateSelected() {
+        if let text = model.activate() { insert(text) }
     }
 
     private func ensurePanel() -> OverlayPanel {
@@ -94,7 +125,7 @@ final class QuickInsertController {
         panel.appearance = NSAppearance(named: .darkAqua)
         panel.onCancel = { [weak self] in self?.hide() }
         panel.contentViewController = NSHostingController(
-            rootView: QuickInsertView(model: model, onInsert: { [weak self] prompt in self?.insert(prompt) })
+            rootView: QuickInsertView(model: model, onActivate: { [weak self] in self?.activateSelected() })
         )
         self.panel = panel
         return panel
@@ -153,8 +184,10 @@ final class QuickInsertController {
                 switch keyCode {
                 case 125: self.model.moveDown(); return true    // down arrow
                 case 126: self.model.moveUp(); return true       // up arrow
-                case 36, 76: self.insertSelected(); return true  // return / keypad enter
-                case 53: self.hide(); return true                // escape
+                case 36, 76: self.activateSelected(); return true  // return / keypad enter
+                case 53:                                           // escape
+                    if self.model.stepList != nil { self.model.closeStepList() } else { self.hide() }
+                    return true
                 default: return false
                 }
             }
