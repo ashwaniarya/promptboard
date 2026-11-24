@@ -38,7 +38,7 @@ Today a chain row only says "N steps", and its progress is visible only after op
 
 ## Conflicts with current code
 
-- Today ⏎ on a chain row **opens the step list** (`QuickInsertModel.swift:93-95`) and → is unhandled (`QuickInsertController.swift:184-190`). The approved design changes ⏎ to paste-next and moves "open steps" to → (key code 124). This is a deliberate behaviour change and gets its own PR.
+- Today ⏎ on a chain row **opens the step list** (`QuickInsertModel.swift:96-98`) and → is unhandled (`QuickInsertController.swift:184-190`). The approved design changes ⏎ to paste-next and moves "open steps" to → (key code 124). This is a deliberate behaviour change and gets its own PR.
 - `ChainStepList.Row` (`.ready` / `.missing`) has no linked/custom tag and no current marker; the view-model below supplies both so the existing enum stays.
 - The step list's `selectedIndex` follows arrow picks, so it is not "current". Current comes from stored progress, not selection.
 
