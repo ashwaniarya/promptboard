@@ -27,6 +27,7 @@ enum DebugHooks {
     static let moveFirstItemNotification = "com.arya.PromptBoard.debug.moveFirstItem"
     static let dumpFolderTreeNotification = "com.arya.PromptBoard.debug.dumpFolderTree"
     static let chainPickNotification = "com.arya.PromptBoard.debug.chainPick"
+    static let newChainNotification = "com.arya.PromptBoard.debug.newChain"
 
     static var isEnabled: Bool {
         ProcessInfo.processInfo.environment["PROMPTBOARD_DEBUG"] == "1"
@@ -69,6 +70,7 @@ enum DebugHooks {
             (moveFirstItemNotification, #selector(DebugHookTarget.handleMoveFirstItem(_:))),
             (dumpFolderTreeNotification, #selector(DebugHookTarget.handleDumpFolderTree(_:))),
             (chainPickNotification, #selector(DebugHookTarget.handleChainPick(_:))),
+            (newChainNotification, #selector(DebugHookTarget.handleNewChain(_:))),
         ]
         for (name, selector) in hooks {
             center.addObserver(
@@ -189,6 +191,19 @@ private final class DebugHookTarget: NSObject {
             }
             NSLog("%@", "PromptBoardDebug convertFirstPrompt -> \(prompt.title)")
             appState.beginConverting(prompt)
+        }
+    }
+
+    @objc nonisolated func handleNewChain(_ notification: Notification) {
+        let title = notification.object as? String ?? "Debug chain"
+        MainActor.assumeIsolated {
+            guard let prompt = appState.store.prompts.first else {
+                NSLog("%@", "PromptBoardDebug newChain: no prompts")
+                return
+            }
+            appState.beginCreatingChain()
+            let chain = appState.saveChain(title: title, steps: [.linked(promptID: prompt.id), .custom(text: "debug step")])
+            NSLog("%@", "PromptBoardDebug newChain -> \(chain?.id.uuidString ?? "nil") steps=\(chain?.steps.count ?? 0)")
         }
     }
 

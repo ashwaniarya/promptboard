@@ -15,6 +15,11 @@ final class AppState {
         case edit(Skill)
     }
 
+    enum ChainEditorMode: Equatable {
+        case create
+        case edit(Chain)
+    }
+
     let store: LibraryStore
     var searchText = ""
     var columnCount = 3
@@ -37,6 +42,7 @@ final class AppState {
 
     var expandedItem: LibraryEntry?
     var skillEditorMode: SkillEditorMode?
+    var chainEditorMode: ChainEditorMode?
     var convertingPrompt: Prompt?
     var showExternalItems = true
     var adoptingItem: ExternalItem?
@@ -88,6 +94,7 @@ final class AppState {
         searchText = ""
         editorMode = nil
         expandedItem = nil
+        chainEditorMode = nil
         skillEditorMode = nil
         convertingPrompt = nil
         adoptingItem = nil
@@ -98,6 +105,8 @@ final class AppState {
             adoptingItem = nil
         } else if convertingPrompt != nil {
             convertingPrompt = nil
+        } else if chainEditorMode != nil {
+            chainEditorMode = nil
         } else if skillEditorMode != nil {
             skillEditorMode = nil
         } else if editorMode != nil {
@@ -116,6 +125,8 @@ final class AppState {
             adoptingItem = nil
         } else if convertingPrompt != nil {
             convertingPrompt = nil
+        } else if chainEditorMode != nil {
+            chainEditorMode = nil
         } else if skillEditorMode != nil {
             skillEditorMode = nil
         } else if editorMode != nil {
@@ -194,6 +205,30 @@ final class AppState {
     func beginEditingSkill(_ skill: Skill) {
         expandedItem = nil
         skillEditorMode = .edit(skill)
+    }
+
+    func beginCreatingChain() {
+        expandedItem = nil
+        chainEditorMode = .create
+    }
+
+    func beginEditingChain(_ chain: Chain) {
+        expandedItem = nil
+        chainEditorMode = .edit(chain)
+    }
+
+    @discardableResult
+    func saveChain(title: String, steps: [Chain.Step]) -> Chain? {
+        defer { chainEditorMode = nil }
+        switch chainEditorMode {
+        case .create:
+            return store.addChain(title: title, steps: steps)
+        case .edit(let chain):
+            store.updateChain(id: chain.id, title: title, steps: steps)
+            return store.chains.first { $0.id == chain.id }
+        case nil:
+            return nil
+        }
     }
 
     func beginConverting(_ prompt: Prompt) {
