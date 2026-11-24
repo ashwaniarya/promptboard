@@ -49,6 +49,12 @@ struct QuickInsertView: View {
                 ForEach(Array(model.results.enumerated()), id: \.element.id) { index, entry in
                     row(entry, index: index)
                 }
+                if case .chain? = model.selected {
+                    Text("⏎ paste next · → open steps")
+                        .font(.system(size: 10)).foregroundStyle(.tertiary)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 6)
+                }
             }
             .padding(6)
         }

@@ -291,7 +291,7 @@ private final class DebugHookTarget: NSObject {
                 NSLog("%@", "PromptBoardDebug chainRestart: no chain for \(query)")
                 return
             }
-            _ = model.activate()
+            _ = model.openSteps()
             model.restart()
             let stored = appState.store.chainProgress.index(for: chain.id, stepCount: chain.steps.count)
             NSLog("%@", "PromptBoardDebug chainRestart chain=\(chain.title) index=\(stored) selected=\(model.stepList?.selectedIndex.map(String.init) ?? "nil") open=\(model.stepList != nil)")
