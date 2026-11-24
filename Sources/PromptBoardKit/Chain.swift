@@ -34,8 +34,8 @@ public struct Chain: Identifiable, Codable, Equatable, Hashable, Sendable {
     }
 }
 
-// Body syntax: `- @<uuid>` for a linked step; a backtick fence on its own line,
-// the text, then the same fence for a custom step. Anything else is ignored.
+// Body syntax: `- @<uuid>` for a linked step; a backtick fence (optionally with an info
+// string), the text, then the bare fence for a custom step. Anything else is ignored.
 public enum ChainBody {
     private static let linkPrefix = "- @"
 
@@ -63,9 +63,10 @@ public enum ChainBody {
                 if let id = UUID(uuidString: String(line.dropFirst(linkPrefix.count))) {
                     steps.append(.linked(promptID: id))
                 }
-            } else if line.count >= 3, line.allSatisfy({ $0 == "`" }) {
+            } else if line.hasPrefix("```") {
+                let fence = String(line.prefix { $0 == "`" })
                 var textLines: [String] = []
-                while index < lines.count, lines[index].trimmingCharacters(in: .whitespaces) != line {
+                while index < lines.count, lines[index].trimmingCharacters(in: .whitespaces) != fence {
                     textLines.append(lines[index])
                     index += 1
                 }

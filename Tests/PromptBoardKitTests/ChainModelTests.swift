@@ -41,4 +41,9 @@ struct ChainModelTests {
         let text = Frontmatter.render(fields: [("kind", "chain")], body: ChainBody.render(steps))
         #expect(ChainBody.parse(Frontmatter.parse(text).body) == steps)
     }
+    @Test func fenceWithInfoStringParsesAndRoundTrips() {
+        let steps = ChainBody.parse("```text\nhello\nworld\n```")
+        #expect(steps == [.custom(text: "hello\nworld")])
+        #expect(ChainBody.parse(ChainBody.render(steps)) == steps)
+    }
 }
