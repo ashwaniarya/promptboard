@@ -1,4 +1,5 @@
 import AppKit
+import Observation
 import PromptBoardKit
 
 @MainActor
@@ -30,6 +31,7 @@ enum DebugHooks {
     static let newChainNotification = "com.arya.PromptBoard.debug.newChain"
     static let chainStateNotification = "com.arya.PromptBoard.debug.chainState"
     static let chainRestartNotification = "com.arya.PromptBoard.debug.chainRestart"
+    static let chainRowEnterNotification = "com.arya.PromptBoard.debug.chainRowEnter"
 
     static var isEnabled: Bool {
         ProcessInfo.processInfo.environment["PROMPTBOARD_DEBUG"] == "1"
@@ -75,6 +77,7 @@ enum DebugHooks {
             (newChainNotification, #selector(DebugHookTarget.handleNewChain(_:))),
             (chainStateNotification, #selector(DebugHookTarget.handleChainState(_:))),
             (chainRestartNotification, #selector(DebugHookTarget.handleChainRestart(_:))),
+            (chainRowEnterNotification, #selector(DebugHookTarget.handleChainRowEnter(_:))),
         ]
         for (name, selector) in hooks {
             center.addObserver(
@@ -295,6 +298,30 @@ private final class DebugHookTarget: NSObject {
             model.restart()
             let stored = appState.store.chainProgress.index(for: chain.id, stepCount: chain.steps.count)
             NSLog("%@", "PromptBoardDebug chainRestart chain=\(chain.title) index=\(stored) selected=\(model.stepList?.selectedIndex.map(String.init) ?? "nil") open=\(model.stepList != nil)")
+        }
+    }
+
+    // ⏎ on the first chain row without pasting, reporting whether a view reading
+    // progressView(for:) would be told to redraw.
+    @objc nonisolated func handleChainRowEnter(_ notification: Notification) {
+        let query = notification.object as? String ?? ""
+        MainActor.assumeIsolated {
+            let model = quickInsertController.model
+            model.query = query
+            model.selectedIndex = 0
+            guard case .chain(let chain)? = model.selected else {
+                NSLog("%@", "PromptBoardDebug chainRowEnter: no chain for \(query)")
+                return
+            }
+            nonisolated(unsafe) var observedChange = false
+            let before = withObservationTracking {
+                model.progressView(for: chain)
+            } onChange: {
+                observedChange = true
+            }
+            let pasted = model.activate()
+            let after = model.progressView(for: chain)
+            NSLog("%@", "PromptBoardDebug chainRowEnter chain=\(chain.title) before=done:\(before.isDone),current:\(before.currentIndex.map(String.init) ?? "nil") after=done:\(after.isDone),current:\(after.currentIndex.map(String.init) ?? "nil") pasted=\(pasted != nil) observedChange=\(observedChange)")
         }
     }
 

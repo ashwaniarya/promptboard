@@ -19,6 +19,8 @@ final class QuickInsertModel {
     }
     var selectedIndex = 0
     private(set) var stepList: ChainStepList?
+    // chain-state.json is not observable; bumping this redraws rows that read progress.
+    private var progressRevision = 0
 
     init(store: LibraryStore) {
         self.store = store
@@ -35,7 +37,8 @@ final class QuickInsertModel {
     }
 
     func stepList(for chain: Chain) -> ChainStepList {
-        ChainStepList(
+        _ = progressRevision
+        return ChainStepList(
             chain: chain, prompts: store.prompts,
             progressIndex: store.chainProgress.index(for: chain.id, stepCount: chain.steps.count)
         )
@@ -131,6 +134,7 @@ final class QuickInsertModel {
         } catch {
             NSLog("%@", "PromptBoard: could not reset chain progress: \(error)")
         }
+        progressRevision += 1
         stepList = stepList(for: chain)
     }
 
@@ -140,5 +144,6 @@ final class QuickInsertModel {
         } catch {
             NSLog("%@", "PromptBoard: could not save chain progress: \(error)")
         }
+        progressRevision += 1
     }
 }
