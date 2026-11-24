@@ -66,7 +66,6 @@ final class AppState {
 
     var visibleItems: [LibraryEntry] {
         var items = store.items
-        if !Constants.chainsEnabled { items = items.filter { $0.kind != .chain } }
         if let selectedFolder {
             items = items.filter {
                 $0.group == selectedFolder || ($0.group?.hasPrefix(selectedFolder + "/") ?? false)

@@ -25,8 +25,7 @@ final class QuickInsertModel {
     }
 
     var results: [LibraryEntry] {
-        let entries = Constants.chainsEnabled ? store.items : store.items.filter { $0.kind != .chain }
-        return Array(PromptFilter.quickInsertResults(entries, query: query).prefix(maxResults))
+        Array(PromptFilter.quickInsertResults(store.items, query: query).prefix(maxResults))
     }
 
     var selected: LibraryEntry? {

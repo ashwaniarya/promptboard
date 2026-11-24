@@ -13,6 +13,7 @@ struct PromptCardView: View {
     private let accent = Color(red: 0.49, green: 0.51, blue: 1.0)
 
     private var isSkill: Bool { item.kind == .skill }
+    private var isChain: Bool { item.kind == .chain }
     private var skillFiles: [SkillFile] {
         if case .skill(let skill) = item { skill.files } else { [] }
     }
@@ -68,8 +69,8 @@ struct PromptCardView: View {
 
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-            if isSkill {
-                Image(systemName: "puzzlepiece.extension.fill")
+            if isSkill || isChain {
+                Image(systemName: isChain ? "list.number" : "puzzlepiece.extension.fill")
                     .font(.system(size: 11))
                     .foregroundStyle(accent)
             }
@@ -114,11 +115,13 @@ struct PromptCardView: View {
             HStack(spacing: 4) {
                 if isSkill {
                     iconButton("pencil", help: "Edit skill") { editSkill() }
+                } else if case .chain(let chain) = item {
+                    iconButton("pencil", help: "Edit chain") { appState.beginEditingChain(chain) }
                 } else {
                     iconButton("puzzlepiece.extension", help: "Convert to skill") { convertPrompt() }
                 }
                 iconButton("arrow.up.left.and.arrow.down.right", help: "Expand") { openDetail() }
-                iconButton("xmark", help: isSkill ? "Delete skill" : "Delete prompt") {
+                iconButton("xmark", help: isSkill ? "Delete skill" : isChain ? "Delete chain" : "Delete prompt") {
                     appState.deleteItem(id: item.id)
                 }
             }

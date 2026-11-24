@@ -103,11 +103,20 @@ struct ItemDetailView: View {
             }
         case .chain(let chain):
             ScrollView {
-                Text(ChainBody.render(chain.steps))
-                    .font(.system(size: 13, design: .monospaced))
-                    .textSelection(.enabled)
-                    .padding(18)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                let rows = ChainStepList(chain: chain, prompts: appState.store.prompts, progressIndex: 0).rows
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(rows.indices, id: \.self) { index in
+                        HStack(alignment: .firstTextBaseline, spacing: 10) {
+                            Text("\(index + 1)").font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
+                            switch rows[index] {
+                            case .ready(let title, _): Text(title)
+                            case .missing: Text("missing").italic().foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+                .padding(18)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
