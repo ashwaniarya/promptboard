@@ -13,4 +13,5 @@ enum Constants {
     static let boardHorizontalPadding: CGFloat = 40
     static let editorTitlePlaceholder = "Prompt title"
     static let newFolderPlaceholder = "New folder"
+    static var chainsEnabled: Bool { UserDefaults.standard.bool(forKey: "chainsEnabled") }
 }

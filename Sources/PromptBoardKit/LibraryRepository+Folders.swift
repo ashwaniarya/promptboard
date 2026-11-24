@@ -5,7 +5,7 @@ import Foundation
 // Same discipline as LibraryRepository — self-locking RMW, atomic FS ops.
 extension LibraryRepository {
     func treeRoot(for kind: LibraryEntry.Kind) -> URL {
-        kind == .prompt ? promptsDirectoryURL : skillsDirectoryURL
+        kind == .skill ? skillsDirectoryURL : promptsDirectoryURL
     }
 
     // Validates a `/`-separated relative folder path (no empty/./.. components, not
