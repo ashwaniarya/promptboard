@@ -22,6 +22,7 @@ public struct LibraryRepository: Sendable {
     public var libraryURL: URL { directoryURL.appendingPathComponent("Library", isDirectory: true) }
     public var promptsDirectoryURL: URL { libraryURL.appendingPathComponent("prompts", isDirectory: true) }
     public var skillsDirectoryURL: URL { libraryURL.appendingPathComponent("skills", isDirectory: true) }
+    public var chainStateURL: URL { directoryURL.appendingPathComponent("chain-state.json") }
     private var lockFileURL: URL { libraryURL.appendingPathComponent(".promptboard.lock") }
     private var legacyDataFileURL: URL { directoryURL.appendingPathComponent("prompts.json") }
 
