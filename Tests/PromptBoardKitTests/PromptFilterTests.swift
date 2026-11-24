@@ -96,4 +96,45 @@ struct PromptFilterTests {
     @Test func quickInsertNoMatchReturnsEmpty() {
         #expect(PromptFilter.quickInsertResults(insertPrompts, query: "zebra").isEmpty)
     }
+
+    // MARK: - quickInsertResults over mixed entries
+
+    private let shipChain = Chain(title: "Ship", steps: [.custom(text: "Write the spec\n\nThen stop.")])
+
+    @Test func mixedResultsDropSkills() {
+        let prompt = LibraryEntry.prompt(Prompt(title: "A", content: "a"))
+        let chain = LibraryEntry.chain(shipChain)
+        let skill = LibraryEntry.skill(Skill(name: "s", description: "d", body: "b"))
+
+        #expect(PromptFilter.quickInsertResults([prompt, skill, chain], query: "") == [prompt, chain])
+    }
+
+    @Test func chainRanksByAliasLikePrompts() {
+        let prompt = LibraryEntry.prompt(Prompt(title: "Deploy", content: "ship it now"))
+        let chain = LibraryEntry.chain(shipChain)
+
+        #expect(PromptFilter.quickInsertResults([prompt, chain], query: "/ship") == [chain, prompt])
+    }
+
+    @Test func chainMatchesCustomStepText() {
+        let chain = LibraryEntry.chain(shipChain)
+
+        #expect(PromptFilter.quickInsertResults([chain], query: "stop.") == [chain])
+    }
+
+    @Test func chainDoesNotMatchLinkedPromptContent() {
+        let linked = Prompt(title: "Spec", content: "only-in-linked-prompt")
+        let prompt = LibraryEntry.prompt(linked)
+        let chain = LibraryEntry.chain(Chain(title: "Ship", steps: [.linked(promptID: linked.id)]))
+
+        #expect(PromptFilter.quickInsertResults([chain, prompt], query: "only-in-linked") == [prompt])
+    }
+
+    @Test func stableWithinTierAcrossKinds() {
+        let chain = LibraryEntry.chain(Chain(title: "Big Review Flow", steps: []))
+        let prompt = LibraryEntry.prompt(Prompt(title: "Quick Review", content: "x"))
+
+        #expect(PromptFilter.quickInsertResults([chain, prompt], query: "review") == [chain, prompt])
+        #expect(PromptFilter.quickInsertResults([prompt, chain], query: "review") == [prompt, chain])
+    }
 }
