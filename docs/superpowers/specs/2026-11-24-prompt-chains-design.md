@@ -15,7 +15,8 @@ pastes the next step, one per AI turn.
 2. **One `.md` file per chain** (Approach A). Frontmatter carries `kind: chain` plus the usual
    `id`/`title`/`createdAt`/`updatedAt`; the body is the ordered step list.
 3. **Running:** ⌥/ on a chain pastes its next step. The popup shows the step list with the next step
-   highlighted; arrow keys pick any step.
+   highlighted; arrow keys pick any step. **Picking step N pastes it and progress moves to N+1** (the
+   chain follows the jump).
 4. **Chains appear in ⌥/ search** alongside prompts.
 5. **Chains are built and edited in the board (⌥Space):** add step (pick existing prompt or write
    custom), reorder, remove.
@@ -38,7 +39,7 @@ Running a chain must not modify any prompt file. Only the state file is written 
 
 ## Non-goals (v1)
 
-Clipboard history (separate design) · chains inside chains · variables · MCP write support.
+Clipboard history (separate design) · chains inside chains · variables · MCP exposure of chains (read or write).
 
 ## What it touches (verified against current code)
 
@@ -67,17 +68,26 @@ Clipboard history (separate design) · chains inside chains · variables · MCP 
   step-list rendering (next highlighted, "missing" and "done" states).
 - Board UI (⌥Space): a chain editor sheet (add step, reorder, remove). Exact UI is left to the builder.
 
-## Data shape (builder's call on syntax)
+## Claude's calls (owner may overrule)
 
-Body is an ordered list where each line is either a link to a prompt `id` or a custom text block.
-Exact syntax is left to the builder; it must round-trip through `Frontmatter` and stay human-editable.
+1. **Library type:** chain is a new `.chain` case in `LibraryEntry`
+   (`Sources/PromptBoardKit/LibraryEntry.swift`), same pattern as `.skill`; update its `Kind` and every switch.
+2. **Empty chain:** 0 steps, or all steps missing, shows in ⌥/ greyed as "no steps" and cannot be pasted.
+3. **Progress file:** `~/Library/Application Support/PromptBoard/chain-state.json` (outside the watched
+   prompts dir), shape `{chainId: nextIndex}`. Clamp the index if the chain shrinks; prune unknown ids on load.
+4. **Location:** chains live in prompts-dir folders; group comes from the folder path, like prompts.
+5. **Step syntax in body:** `- @<prompt-uuid>` for a linked step; a fenced ``` block for a custom step
+   (multi-line safe). Must round-trip through `Frontmatter` and stay human-editable.
+6. **Deleted linked prompt:** no warning; the step shows "missing".
+7. **Popup step list:** Esc returns to search results.
+8. **MCP:** chains are not exposed in v1; exclude them from `list_prompts` so they never leak as prompts.
 
 ## Testing
 
 - 🔬 **Unit:** chain parse/render round-trip; `load()` routes `kind: chain` away from prompts;
   next-step resolution skips missing linked prompts; wrap/restart after last step; mixed ranking.
 - 🎭 **Behavioural:** ⌥/ pastes step 1, then 2, in order; editing a linked prompt changes the next
-  paste; arrow pick overrides the next step; deleting a linked prompt shows "missing"; Enter on
+  paste; arrow pick of step N pastes it and moves progress to N+1; deleting a linked prompt shows "missing"; Enter on
   "done" restarts. Verify via debug notifications, as for `debugInsertFirst` (`QuickInsertController.swift:47`).
 - 🔬 **Anti-goal check:** after a full chain run, every prompt and chain file is byte-identical.
 - 💨 **Smoke:** real app — build a 3-step chain, run it in a real AI chat, one step per turn.
