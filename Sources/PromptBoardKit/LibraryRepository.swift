@@ -3,6 +3,7 @@ import Foundation
 public enum LibraryRepositoryError: Error, Sendable {
     case promptNotFound(UUID)
     case skillNotFound(UUID)
+    case chainNotFound(UUID)
     case nothingToUpdate
     case lockTimeout(path: String)
     case ioFailure(underlying: any Error)
@@ -221,7 +222,7 @@ public struct LibraryRepository: Sendable {
         return trimmed.isEmpty ? "Untitled" : trimmed
     }
 
-    private func promptFileURLs() -> [URL] {
+    func promptFileURLs() -> [URL] {
         collectFiles(under: promptsDirectoryURL) { $0.pathExtension == "md" }
     }
 
@@ -249,7 +250,7 @@ public struct LibraryRepository: Sendable {
         return String(parent.dropFirst(base.count + 1))
     }
 
-    private func existingPromptSlugs() -> Set<String> {
+    func existingPromptSlugs() -> Set<String> {
         Set(promptFileURLs().map { $0.deletingPathExtension().lastPathComponent })
     }
 
@@ -294,7 +295,7 @@ public struct LibraryRepository: Sendable {
         }
     }
 
-    private func readChain(at url: URL) -> Chain? {
+    func readChain(at url: URL) -> Chain? {
         guard let text = try? String(contentsOf: url, encoding: .utf8) else { return nil }
         let doc = Frontmatter.parse(text)
         guard doc.fields["kind"] == "chain",

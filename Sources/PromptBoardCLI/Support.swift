@@ -57,6 +57,8 @@ func repositoryErrorMessage(for error: LibraryRepositoryError) -> String {
         "prompt not found: \(id.uuidString)"
     case .skillNotFound(let id):
         "skill not found: \(id.uuidString)"
+    case .chainNotFound(let id):
+        "chain not found: \(id.uuidString)"
     case .nothingToUpdate:
         "nothing to update: pass a field to change"
     case .lockTimeout(let path):
@@ -72,7 +74,7 @@ func repositoryErrorMessage(for error: LibraryRepositoryError) -> String {
 
 private func exitCode(for error: LibraryRepositoryError) -> Int32 {
     switch error {
-    case .promptNotFound, .skillNotFound: 2
+    case .promptNotFound, .skillNotFound, .chainNotFound: 2
     case .nothingToUpdate, .invalidSkillSource: 64
     case .lockTimeout, .ioFailure, .skillLinkConflict: 1
     }
