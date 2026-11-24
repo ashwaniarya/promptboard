@@ -218,4 +218,16 @@ struct LibraryStoreTests {
         #expect(store.skillFileText(id: skill.id, relativePath: "notes.md") == "hello")
         #expect(store.skillFileText(id: skill.id, relativePath: "logo.png") == nil)
     }
+    @Test func handEditedChainStepTextWithSameUpdatedAtIsReloaded() throws {
+        let directory = temporaryDirectory()
+        let store = LibraryStore(directoryURL: directory, syncTargets: .temporary())
+        let chain = try #require(store.addChain(title: "Ship", steps: [.custom(text: "old text")]))
+        let url = directory.appendingPathComponent("Library/prompts/ship.md")
+        let text = try String(contentsOf: url, encoding: .utf8)
+        try Data(text.replacingOccurrences(of: "old text", with: "new text").utf8).write(to: url)
+
+        store.reloadFromDiskIfChanged()
+
+        #expect(store.chains.first { $0.id == chain.id }?.steps == [.custom(text: "new text")])
+    }
 }
