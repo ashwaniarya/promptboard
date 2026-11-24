@@ -230,4 +230,15 @@ struct LibraryStoreTests {
 
         #expect(store.chains.first { $0.id == chain.id }?.steps == [.custom(text: "new text")])
     }
+
+    @Test func updateChainReportsFailureWhenChainIsGone() throws {
+        let directory = temporaryDirectory()
+        let store = LibraryStore(directoryURL: directory, syncTargets: .temporary())
+        let chain = try #require(store.addChain(title: "Ship", steps: [.custom(text: "x")]))
+        try FileManager.default.removeItem(at: directory.appendingPathComponent("Library/prompts/ship.md"))
+
+        #expect(throws: LibraryRepositoryError.self) {
+            try store.updateChain(id: chain.id, title: "Ship", steps: [.custom(text: "edited")])
+        }
+    }
 }
