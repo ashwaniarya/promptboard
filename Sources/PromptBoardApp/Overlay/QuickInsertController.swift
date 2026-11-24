@@ -178,6 +178,7 @@ final class QuickInsertController {
         guard keyMonitor == nil else { return }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event -> NSEvent? in
             let keyCode = event.keyCode
+            let commandOnly = event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command
             // Extract the Sendable keyCode before hopping onto the main actor — NSEvent isn't Sendable.
             let handled = MainActor.assumeIsolated { () -> Bool in
                 guard let self else { return false }
@@ -185,6 +186,9 @@ final class QuickInsertController {
                 case 125: self.model.moveDown(); return true    // down arrow
                 case 126: self.model.moveUp(); return true       // up arrow
                 case 36, 76: self.activateSelected(); return true  // return / keypad enter
+                case 15 where commandOnly && self.model.stepList != nil:  // ⌘R
+                    self.model.restart()
+                    return true
                 case 53:                                           // escape
                     if self.model.stepList != nil { self.model.closeStepList() } else { self.hide() }
                     return true

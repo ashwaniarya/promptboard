@@ -122,43 +122,66 @@ struct QuickInsertView: View {
     }
 
     private func stepListView(_ stepList: ChainStepList) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        let progress = ChainProgressView(stepList: stepList)
+        return VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 8) {
                 Image(systemName: "list.number").foregroundStyle(accent)
                 Text(stepList.chain.title).font(.system(size: 12, weight: .semibold))
                 Spacer(minLength: 6)
-                Text("esc back").font(.system(size: 10)).foregroundStyle(.tertiary)
+                Text(progress.isDone ? "done" : "step \(progress.completedCount + 1) of \(progress.stepCount)")
+                    .font(.system(size: 10)).foregroundStyle(.tertiary)
             }
             .padding(.horizontal, 10).padding(.vertical, 6)
             ForEach(Array(stepList.rows.enumerated()), id: \.offset) { index, row in
-                stepRow(row, index: index, selected: index == stepList.selectedIndex)
+                stepRow(
+                    row, index: index, selected: index == stepList.selectedIndex,
+                    isDone: progress.segments[index] == .done, tag: progress.rowTags[index]
+                )
             }
-            if stepList.isDone {
-                Text("done · ⏎ restarts")
-                    .font(.system(size: 11)).foregroundStyle(accent)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 8)
-            }
+            Text("⏎ paste and advance · ↑↓ pick · ⌘R restart · esc back")
+                .font(.system(size: 10)).foregroundStyle(.tertiary)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, 6)
         }
         .padding(6)
     }
 
-    private func stepRow(_ row: ChainStepList.Row, index: Int, selected: Bool) -> some View {
+    private func stepRow(_ row: ChainStepList.Row, index: Int, selected: Bool, isDone: Bool, tag: ChainProgressView.Tag) -> some View {
         let title: String
         let isMissing: Bool
         switch row {
         case .ready(let readyTitle, _): title = readyTitle; isMissing = false
         case .missing: title = "missing"; isMissing = true
         }
+        let tagText: String
+        switch tag {
+        case .now: tagText = "now"
+        case .linked: tagText = "linked"
+        case .custom: tagText = "custom"
+        case .missingSkipped: tagText = "missing, skipped"
+        }
         return HStack(spacing: 10) {
-            Text("\(index + 1)")
-                .font(.system(size: 11, design: .monospaced)).frame(width: 16)
-                .foregroundStyle(selected ? accent : Color.white.opacity(0.45))
+            Group {
+                if isDone {
+                    Image(systemName: "checkmark.circle.fill").font(.system(size: 14))
+                } else {
+                    Text("\(index + 1)")
+                        .font(.system(size: 9, design: .monospaced))
+                        .frame(width: 16, height: 16)
+                        .overlay(Circle().stroke(lineWidth: 1))
+                }
+            }
+            .frame(width: 16)
+            .foregroundStyle(selected ? accent : Color.white.opacity(0.45))
             Text(title).font(.system(size: 13, weight: .medium)).lineLimit(1)
                 .italic(isMissing)
             Spacer(minLength: 6)
+            Text(tagText)
+                .font(.system(size: 10))
+                .foregroundStyle(tag == .now ? accent : Color.white.opacity(0.4))
         }
         .foregroundStyle(isMissing ? Color.white.opacity(0.35) : selected ? Color.white : Color.white.opacity(0.82))
+        .opacity(isDone ? 0.5 : 1)
         .padding(.horizontal, 10).padding(.vertical, 7)
         .background(RoundedRectangle(cornerRadius: 8).fill(selected ? accent.opacity(0.20) : .clear))
         .contentShape(Rectangle())
