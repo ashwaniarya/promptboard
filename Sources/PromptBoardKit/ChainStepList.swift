@@ -14,11 +14,13 @@ public struct ChainStepList: Equatable, Sendable {
 
     public let chain: Chain
     public let rows: [Row]
+    public let progressIndex: Int
     public private(set) var selectedIndex: Int?
 
     public init(chain: Chain, prompts: [Prompt], progressIndex: Int) {
         let promptsByID = Dictionary(prompts.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         self.chain = chain
+        self.progressIndex = progressIndex
         rows = chain.steps.map { step in
             switch step {
             case .linked(let promptID):

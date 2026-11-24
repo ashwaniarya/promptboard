@@ -69,6 +69,42 @@ struct ChainProgressTests {
         #expect(!FileManager.default.fileExists(atPath: progress.fileURL.path))
     }
 
+    @Test func resetWritesZeroAndKeepsOtherChains() throws {
+        let progress = try makeProgress()
+        let first = UUID()
+        let second = UUID()
+        try progress.setIndex(2, for: first)
+        try progress.setIndex(1, for: second)
+
+        try progress.reset(for: first)
+
+        #expect(progress.index(for: first, stepCount: 3) == 0)
+        #expect(progress.index(for: second, stepCount: 3) == 1)
+    }
+
+    @Test @MainActor func resetNeverWritesLibraryFiles() throws {
+        let directory = temporaryDirectory()
+        let store = LibraryStore(directoryURL: directory, syncTargets: .temporary())
+        let libraryURL = LibraryRepository(directoryURL: directory, syncTargets: .temporary()).libraryURL
+        let chain = try #require(store.addChain(title: "Ship", steps: [.custom(text: "a"), .custom(text: "b")]))
+        let libraryFileDates = {
+            let files = FileManager.default.enumerator(at: libraryURL, includingPropertiesForKeys: [.contentModificationDateKey])?
+                .compactMap { $0 as? URL }
+                .filter { $0.pathExtension == "md" } ?? []
+            return Dictionary(uniqueKeysWithValues: files.map {
+                ($0.path, try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate)
+            })
+        }
+        let before = libraryFileDates()
+
+        try store.chainProgress.setIndex(1, for: chain.id)
+        try store.chainProgress.setIndex(2, for: chain.id)
+        try store.chainProgress.reset(for: chain.id)
+
+        #expect(!before.isEmpty)
+        #expect(libraryFileDates() == before)
+    }
+
     @Test func stateFileIsOutsideLibraryDirectory() {
         let repository = LibraryRepository(directoryURL: temporaryDirectory(), syncTargets: .temporary())
 
