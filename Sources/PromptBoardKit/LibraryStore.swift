@@ -103,6 +103,11 @@ public final class LibraryStore {
         refreshFromDisk()
     }
 
+    public func savePrompt(_ draft: PromptDraft) -> Prompt? {
+        guard draft.canSave else { return nil }
+        return add(title: draft.title, content: draft.content)
+    }
+
     // nil means nothing was written: the draft was unsavable, or its chain is gone from disk.
     public func saveChain(_ draft: ChainDraft) -> Chain? {
         guard draft.canSave else { return nil }

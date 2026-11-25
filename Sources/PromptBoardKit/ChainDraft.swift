@@ -25,6 +25,11 @@ public struct ChainDraft: Equatable, Sendable {
         selectedStep = steps.isEmpty ? nil : 0
     }
 
+    public init(title: String) {
+        self.init()
+        self.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     public var canSave: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && !steps.contains { step in
