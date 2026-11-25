@@ -39,11 +39,6 @@ public enum PromptFilter {
         text.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil
     }
 
-    public static func quickInsertResults(_ prompts: [Prompt], query: String) -> [Prompt] {
-        quickInsertResults(prompts.map(LibraryEntry.prompt), query: query)
-            .compactMap { if case .prompt(let prompt) = $0 { prompt } else { nil } }
-    }
-
     // Ranking for the cursor quick-insert popup over prompts and chains (skills dropped).
     // The slug (recomputed from the title) doubles as a `/alias`. Ranked, best first:
     // exact alias, alias prefix, title substring, content substring. Stable within a tier.

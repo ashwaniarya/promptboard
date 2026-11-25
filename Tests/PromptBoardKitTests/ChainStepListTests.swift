@@ -86,6 +86,14 @@ struct ChainStepListTests {
         #expect(stepList.selectedIndex == 0)
     }
 
+    @Test func selectPicksOnlyReadyRows() {
+        var stepList = list([.custom(text: "a"), .linked(promptID: UUID()), .custom(text: "c")])
+        stepList.select(1)
+        #expect(stepList.selectedIndex == 0)
+        stepList.select(2)
+        #expect(stepList.activate() == .paste(text: "c", nextIndex: 3))
+    }
+
     private func snapshot(_ root: URL) -> [String: Data] {
         var files: [String: Data] = [:]
         let enumerator = FileManager.default.enumerator(at: root, includingPropertiesForKeys: [.isRegularFileKey])
