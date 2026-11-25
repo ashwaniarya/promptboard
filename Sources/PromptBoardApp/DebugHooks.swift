@@ -389,14 +389,20 @@ private final class DebugHookTarget: NSObject {
             case "up": model.moveUp()
             case "enter": _ = model.activate()
             case "new": model.beginNewPrompt()
+            case "edit":
+                let promptID = UUID(uuidString: argument)
+                model.query = promptID.flatMap { model.promptTitle(for: $0) } ?? argument
+                model.selectedIndex = model.results.firstIndex { $0.id == promptID } ?? 0
+                if !model.beginEditSelected() { NSLog("%@", "PromptBoardDebug promptEditor: no prompt for \(argument)") }
             case "title": model.updatePromptDraft { $0.title = argument }
             case "text": model.updatePromptDraft { $0.content = argument }
             case "save": NSLog("%@", "PromptBoardDebug promptEditor saved=\(model.savePromptDraft())")
             case "cancel": model.cancelPromptDraft()
+            case "back": quickInsertController.backToList()
             default: break
             }
             if let draft = model.promptDraft {
-                NSLog("%@", "PromptBoardDebug promptEditor \(command) -> promptDraft title=\(draft.title) text=\(draft.content.debugDescription) canSave=\(draft.canSave) error=\(model.promptSaveError ?? "-")")
+                NSLog("%@", "PromptBoardDebug promptEditor \(command) -> promptDraft id=\(draft.promptID?.uuidString ?? "new") title=\(draft.title) text=\(draft.content.debugDescription) canSave=\(draft.canSave) error=\(model.promptSaveError ?? "-")")
             } else if let draft = model.chainDraft {
                 NSLog("%@", "PromptBoardDebug promptEditor \(command) -> chainDraft title=\(draft.title) steps=\(draft.steps.count)")
             } else {
@@ -407,7 +413,7 @@ private final class DebugHookTarget: NSObject {
     }
 
     // Object is "verb:arg": new, edit:<query>, title:<text>, query:<text>, addLinked:<query>,
-    // addCustom:<text>, select:<index>, move:up|down, remove, save, cancel, dump. Logs the draft after.
+    // addCustom:<text>, select:<index>, move:up|down, remove, save, cancel, back, dump. Logs the draft after.
     @objc nonisolated func handleChainEditor(_ notification: Notification) {
         let command = notification.object as? String ?? "dump"
         let verb = command.prefix { $0 != ":" }
@@ -420,7 +426,7 @@ private final class DebugHookTarget: NSObject {
             case "edit":
                 model.query = argument
                 model.selectedIndex = model.results.firstIndex { $0.kind == .chain } ?? 0
-                if !model.beginEditSelectedChain() { NSLog("%@", "PromptBoardDebug chainEditor: no chain for \(argument)") }
+                if !model.beginEditSelected() { NSLog("%@", "PromptBoardDebug chainEditor: no chain for \(argument)") }
             case "title": model.updateChainDraft { $0.title = argument }
             case "query": model.updateChainDraft { $0.query = argument }
             case "addLinked":
@@ -434,6 +440,7 @@ private final class DebugHookTarget: NSObject {
             case "remove": model.updateChainDraft { $0.removeSelectedStep() }
             case "save": NSLog("%@", "PromptBoardDebug chainEditor saved=\(model.saveChainDraft())")
             case "cancel": model.cancelChainDraft()
+            case "back": quickInsertController.backToList()
             default: break
             }
             guard let draft = model.chainDraft else {

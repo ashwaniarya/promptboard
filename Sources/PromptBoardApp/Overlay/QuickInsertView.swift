@@ -7,6 +7,8 @@ import PromptBoardKit
 struct QuickInsertView: View {
     @Bindable var model: QuickInsertModel
     let onActivate: () -> Void
+    let onEdit: () -> Void
+    let onBack: () -> Void
 
     static let searchPlaceholder = "insert a prompt…"
     static let chainTitlePlaceholder = "Chain title"
@@ -122,9 +124,9 @@ struct QuickInsertView: View {
                 createRow("New prompt", shortcut: "⌘⇧N", index: model.results.count + 1, selected: model.isNewPromptRowSelected)
                 Group {
                     if case .chain(let chain)? = model.selected, !model.progressView(for: chain).isEmpty {
-                        Text("⏎ paste next · → open steps · ⌘E edit chain · ⌘N new chain")
+                        Text("⏎ paste next · → open steps · ⌘E edit · ⌘N new chain · ⌘⇧N new prompt")
                     } else {
-                        Text("⇥ switch tab · ⌘E edit chain · ⌘N new chain")
+                        Text("⇥ switch tab · ⌘E edit · ⌘N new chain · ⌘⇧N new prompt")
                     }
                 }
                 .font(.system(size: 10)).foregroundStyle(.tertiary)
@@ -170,6 +172,21 @@ struct QuickInsertView: View {
             Text("/\(Slug.make(from: entry.title))")
                 .font(.system(size: 10, design: .monospaced))
                 .foregroundStyle(selected ? accent : Color.white.opacity(0.4)).lineLimit(1)
+            if entry.kind != .skill {
+                Button {
+                    model.selectedIndex = index
+                    onEdit()
+                } label: {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 11))
+                        .foregroundStyle(selected ? accent : Color.white.opacity(0.4))
+                        .frame(width: 18, height: 18)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(entry.kind == .chain ? "Edit chain" : "Edit prompt")
+                .accessibilityLabel(entry.kind == .chain ? "Edit chain" : "Edit prompt")
+            }
         }
         .foregroundStyle(selected ? Color.white : Color.white.opacity(0.82))
         .opacity(emptyChain ? 0.45 : 1)
@@ -205,6 +222,7 @@ struct QuickInsertView: View {
     private var promptEditor: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
+                backButton
                 Image(systemName: "doc.text").foregroundStyle(accent)
                 TextField(Self.promptTitlePlaceholder, text: Binding(
                     get: { model.promptDraft?.title ?? "" },
@@ -212,7 +230,8 @@ struct QuickInsertView: View {
                 ))
                 .textFieldStyle(.plain).font(.system(size: 14, weight: .semibold))
                 Spacer(minLength: 6)
-                Text("new prompt").font(.system(size: 10)).foregroundStyle(.tertiary)
+                Text(model.promptDraft?.promptID == nil ? "new prompt" : "edit prompt")
+                    .font(.system(size: 10)).foregroundStyle(.tertiary)
             }
             .padding(.horizontal, 15).padding(.vertical, 12)
             Rectangle().fill(.white.opacity(0.08)).frame(height: 1)
@@ -236,9 +255,25 @@ struct QuickInsertView: View {
         }
     }
 
+    private var backButton: some View {
+        Button(action: onBack) {
+            HStack(spacing: 3) {
+                Image(systemName: "chevron.left").font(.system(size: 10, weight: .semibold))
+                Text("Back").font(.system(size: 11))
+            }
+            .foregroundStyle(Color.white.opacity(0.6))
+            .padding(.horizontal, 6).padding(.vertical, 3)
+            .background(Capsule().fill(.white.opacity(0.08)))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .help("Back to the list without saving (esc)")
+    }
+
     private func chainEditor(_ draft: ChainDraft) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
+                backButton
                 Image(systemName: "list.number").foregroundStyle(accent)
                 TextField(Self.chainTitlePlaceholder, text: Binding(
                     get: { model.chainDraft?.title ?? "" },

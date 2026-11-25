@@ -171,6 +171,18 @@ final class QuickInsertController {
         focusField(placeholder: QuickInsertView.searchPlaceholder)
     }
 
+    // Back button and esc: drop any open draft unsaved and return to the list.
+    func backToList() {
+        model.cancelChainDraft()
+        model.cancelPromptDraft()
+        focusField(placeholder: QuickInsertView.searchPlaceholder)
+    }
+
+    private func editSelected() {
+        guard model.beginEditSelected() else { return }
+        if model.chainDraft != nil { focusChainEditor() } else { focusPromptEditor() }
+    }
+
     private func focusChainEditor() {
         let needsTitle = model.chainDraft?.chainID == nil && model.chainDraft?.title.isEmpty ?? true
         focusField(placeholder: needsTitle ? QuickInsertView.chainTitlePlaceholder : QuickInsertView.stepSearchPlaceholder)
@@ -247,7 +259,12 @@ final class QuickInsertController {
         panel.appearance = NSAppearance(named: .darkAqua)
         panel.onCancel = { [weak self] in self?.hide() }
         panel.contentViewController = NSHostingController(
-            rootView: QuickInsertView(model: model, onActivate: { [weak self] in self?.activateSelected() })
+            rootView: QuickInsertView(
+                model: model,
+                onActivate: { [weak self] in self?.activateSelected() },
+                onEdit: { [weak self] in self?.editSelected() },
+                onBack: { [weak self] in self?.backToList() }
+            )
         )
         self.panel = panel
         return panel
@@ -321,7 +338,7 @@ final class QuickInsertController {
                 let inPromptList = self.model.tab == .prompts && self.model.stepList == nil
                 switch keyCode {
                 case _ where inPromptList && chordFlags == .command && character == "e":
-                    if self.model.beginEditSelectedChain() { self.focusChainEditor() }
+                    self.editSelected()
                     return true
                 case _ where inPromptList && chordFlags == .command && character == "n":
                     self.model.beginNewChain()

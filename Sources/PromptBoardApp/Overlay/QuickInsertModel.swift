@@ -224,10 +224,18 @@ final class QuickInsertModel {
         change(&promptDraft!)
     }
 
-    func beginEditSelectedChain() -> Bool {
-        guard stepList == nil, case .chain(let chain)? = selected else { return false }
-        chainSaveError = nil
-        chainDraft = ChainDraft(chain: chain)
+    func beginEditSelected() -> Bool {
+        guard stepList == nil else { return false }
+        switch selected {
+        case .chain(let chain):
+            chainSaveError = nil
+            chainDraft = ChainDraft(chain: chain)
+        case .prompt(let prompt):
+            promptSaveError = nil
+            promptDraft = PromptDraft(prompt: prompt)
+        case .skill, nil:
+            return false
+        }
         return true
     }
 
