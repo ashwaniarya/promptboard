@@ -20,6 +20,10 @@ public struct ChainProgress: Sendable {
         try writeState(state)
     }
 
+    public func reset(for chainID: UUID) throws {
+        try setIndex(0, for: chainID)
+    }
+
     public func prune(keeping chainIDs: Set<UUID>) throws {
         guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
         let state = readState()
