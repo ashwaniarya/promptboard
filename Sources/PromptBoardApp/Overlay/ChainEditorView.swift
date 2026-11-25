@@ -116,6 +116,9 @@ struct ChainEditorView: View {
                 .buttonStyle(.plain).foregroundStyle(.red.opacity(0.9))
             }
             Spacer()
+            if let chainSaveError = appState.chainSaveError {
+                Text(chainSaveError).font(.caption).foregroundStyle(.red.opacity(0.9))
+            }
             Button("Cancel") { appState.chainEditorMode = nil }.buttonStyle(.plain)
             Button(isCreate ? "Create" : "Save") { appState.saveChain(title: title, steps: steps) }
                 .buttonStyle(.borderedProminent)

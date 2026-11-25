@@ -85,14 +85,10 @@ public final class LibraryStore {
         }
     }
 
-    public func updateChain(id: UUID, title: String, steps: [Chain.Step]) {
-        do {
-            _ = try repository.updateChain(id: id, title: title, steps: steps)
-            refreshFromDisk()
-        } catch LibraryRepositoryError.chainNotFound {
-        } catch {
-            reportFailure(error)
-        }
+    // Throws so the editor can stay open: a chain deleted or renamed on disk must not eat the edit.
+    public func updateChain(id: UUID, title: String, steps: [Chain.Step]) throws {
+        _ = try repository.updateChain(id: id, title: title, steps: steps)
+        refreshFromDisk()
     }
 
     // Routes by id: a prompt if one matches, then a chain, otherwise a skill.
@@ -341,7 +337,7 @@ public final class LibraryStore {
             case .skill(let skill):
                 "s:\(skill.id.uuidString):\(skill.updatedAt.timeIntervalSince1970):\(skill.body.count)"
             case .chain(let chain):
-                "c:\(chain.id.uuidString):\(chain.updatedAt.timeIntervalSince1970):\(chain.steps.count)"
+                "c:\(chain.id.uuidString):\(chain.updatedAt.timeIntervalSince1970):\(ChainBody.render(chain.steps).hashValue)"
             }
         }
         .sorted()

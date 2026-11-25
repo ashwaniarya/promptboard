@@ -88,6 +88,7 @@ struct OverlayRootView: View {
     private var newMenu: some View {
         Menu {
             Button("New skill") { appState.beginCreatingSkill() }
+            Button("New chain") { appState.beginCreatingChain() }
         } label: {
             Image(systemName: "plus")
                 .font(.title3.weight(.semibold))

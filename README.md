@@ -39,6 +39,14 @@ Organize prompts and skills into **nested folders** — real directories, not ta
 - **`group` means "folder" everywhere it's set.** In the CLI/MCP, `add --group Work/ClientA` files a prompt into `prompts/Work/ClientA/`, and `update --group`, `import-skill --group`, and `update-skill-group` move the item into that folder. In the editor/convert sheets, the "group" field does the same.
 - **Cross-tool sync is unaffected.** Skills sync by their flat leaf name regardless of how deep they're nested — a skill in `skills/Work/logo-export/` still shows up as `/logo-export` in every tool. Your old flat groups migrate to top-level folders once, automatically, on first launch.
 
+## Chains
+
+A chain is an ordered list of steps you paste one at a time. Make one from the board's **+** menu → **New chain**: add linked prompts (**Add prompt**) or free text (**Add custom**), reorder with ↑/↓, then **Save**.
+
+- **File format.** A chain is a `.md` file in the prompts tree with `kind: chain` in its frontmatter. Each body line `- @<prompt-uuid>` links a prompt (its current text is pasted, so edits flow through); a custom step is a backtick fence block. A link whose prompt is gone shows as *missing* and is skipped.
+- **⌥/ flow.** Pick a chain in the quick-insert popup → its numbered step list opens on the next step. **⏎** pastes that step and advances; **↑↓** jumps to another step. After the last step the list says *done* and **⏎** restarts. **Esc** goes back to the results.
+- **Progress** lives in `~/Library/Application Support/PromptBoard/chain-state.json` (`{"<chain-uuid>": nextStepIndex}`), outside `Library/`, so running a chain never touches your library files. Deleted chains are pruned at launch.
+
 ## Library layout
 
 Everything lives as human-readable files under `~/Library/Application Support/PromptBoard/Library/`:

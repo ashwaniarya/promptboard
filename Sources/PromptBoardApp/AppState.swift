@@ -42,7 +42,10 @@ final class AppState {
 
     var expandedItem: LibraryEntry?
     var skillEditorMode: SkillEditorMode?
-    var chainEditorMode: ChainEditorMode?
+    var chainEditorMode: ChainEditorMode? {
+        didSet { chainSaveError = nil }
+    }
+    var chainSaveError: String?
     var convertingPrompt: Prompt?
     var showExternalItems = true
     var adoptingItem: ExternalItem?
@@ -66,7 +69,6 @@ final class AppState {
 
     var visibleItems: [LibraryEntry] {
         var items = store.items
-        if !Constants.chainsEnabled { items = items.filter { $0.kind != .chain } }
         if let selectedFolder {
             items = items.filter {
                 $0.group == selectedFolder || ($0.group?.hasPrefix(selectedFolder + "/") ?? false)
@@ -219,12 +221,18 @@ final class AppState {
 
     @discardableResult
     func saveChain(title: String, steps: [Chain.Step]) -> Chain? {
-        defer { chainEditorMode = nil }
         switch chainEditorMode {
         case .create:
+            chainEditorMode = nil
             return store.addChain(title: title, steps: steps)
         case .edit(let chain):
-            store.updateChain(id: chain.id, title: title, steps: steps)
+            do {
+                try store.updateChain(id: chain.id, title: title, steps: steps)
+            } catch {
+                chainSaveError = "Could not save: this chain was moved or deleted on disk."
+                return nil
+            }
+            chainEditorMode = nil
             return store.chains.first { $0.id == chain.id }
         case nil:
             return nil
