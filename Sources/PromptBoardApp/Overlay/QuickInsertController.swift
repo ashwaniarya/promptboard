@@ -10,12 +10,30 @@ final class QuickInsertController {
     let model: QuickInsertModel
     private var panel: OverlayPanel?
     private var keyMonitor: Any?
+    private var clipboardTimer: Timer?
+    private var lastChangeCount = NSPasteboard.general.changeCount
+    private static let skippedPasteboardTypes: Set<NSPasteboard.PasteboardType> = [
+        NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"), TextInserter.transientType,
+    ]
 
     init(store: LibraryStore) {
         self.model = QuickInsertModel(store: store)
+        clipboardTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.pollClipboard() }
+        }
+    }
+
+    // In-memory only; password-manager (concealed) and our own transient writes are skipped.
+    private func pollClipboard() {
+        let pasteboard = NSPasteboard.general
+        guard pasteboard.changeCount != lastChangeCount else { return }
+        lastChangeCount = pasteboard.changeCount
+        if let types = pasteboard.types, !Self.skippedPasteboardTypes.isDisjoint(with: types) { return }
+        if let text = pasteboard.string(forType: .string) { model.clipboardHistory.record(text) }
     }
 
     var isVisible: Bool { panel?.isVisible ?? false }
+    var contentView: NSView? { panel?.contentView }
 
     func trigger() {
         // D4 gates on Accessibility permission here.
@@ -81,6 +99,19 @@ final class QuickInsertController {
         }
         model.closeStepList()
         NSLog("%@", "PromptBoardDebug \(label) pasted=\(text.prefix(40)) next=\(nextIndex)")
+        performInsert(text)
+    }
+
+    // Debug-only: paste the first clipboard-tab match, then report the history so the
+    // harness can confirm the paste did not re-add or reorder anything.
+    func debugPasteFirstClip(query: String) {
+        model.tab = .clipboard
+        model.query = query
+        guard let text = model.activate() else {
+            NSLog("%@", "PromptBoardDebug pasteFirstClip: no clip for \(query)")
+            return
+        }
+        NSLog("%@", "PromptBoardDebug pasteFirstClip pasted=\(text.prefix(40))")
         performInsert(text)
     }
 
@@ -182,6 +213,7 @@ final class QuickInsertController {
                 switch keyCode {
                 case 125: self.model.moveDown(); return true    // down arrow
                 case 126: self.model.moveUp(); return true       // up arrow
+                case 48: self.model.switchTab(); return true     // tab
                 case 36, 76: self.activateSelected(); return true  // return / keypad enter
                 case 15 where commandOnly && self.model.stepList != nil:  // ⌘R
                     self.model.restart()

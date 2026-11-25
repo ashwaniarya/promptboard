@@ -14,8 +14,9 @@ struct QuickInsertView: View {
     var body: some View {
         VStack(spacing: 0) {
             searchField
+            tabStrip
             Rectangle().fill(.white.opacity(0.08)).frame(height: 1)
-            results
+            if model.tab == .clipboard { clipboardList } else { results }
         }
         .frame(width: 440)
         .background(RoundedRectangle(cornerRadius: 14).fill(Color(white: 0.12)))
@@ -29,10 +30,68 @@ struct QuickInsertView: View {
                 .textFieldStyle(.plain)
                 .font(.system(size: 14))
             Spacer(minLength: 6)
-            Text("\(model.results.count)")
+            Text("\(model.visibleCount)")
                 .font(.system(size: 11)).foregroundStyle(.tertiary)
         }
         .padding(.horizontal, 15).padding(.vertical, 12)
+    }
+
+    private var tabStrip: some View {
+        HStack(spacing: 4) {
+            tabButton("Prompts", tab: .prompts)
+            tabButton("Clipboard", tab: .clipboard)
+            Spacer()
+        }
+        .padding(.horizontal, 12).padding(.bottom, 8)
+    }
+
+    private func tabButton(_ title: String, tab: QuickInsertModel.Tab) -> some View {
+        let active = model.tab == tab
+        return Text(title)
+            .font(.system(size: 11, weight: active ? .semibold : .regular))
+            .foregroundStyle(active ? Color.white : Color.white.opacity(0.5))
+            .padding(.horizontal, 9).padding(.vertical, 3)
+            .background(Capsule().fill(active ? accent.opacity(0.25) : .clear))
+            .contentShape(Capsule())
+            .onTapGesture { model.tab = tab }
+    }
+
+    @ViewBuilder
+    private var clipboardList: some View {
+        let clips = model.clipboardResults
+        if clips.isEmpty {
+            Text(model.query.isEmpty ? "Nothing copied yet" : "No matches")
+                .font(.system(size: 12)).foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, 20)
+        } else {
+            VStack(spacing: 2) {
+                ForEach(Array(clips.enumerated()), id: \.offset) { index, clip in
+                    clipRow(clip, index: index)
+                }
+            }
+            .padding(6)
+        }
+    }
+
+    private func clipRow(_ clip: String, index: Int) -> some View {
+        let selected = index == model.selectedIndex
+        return HStack(spacing: 10) {
+            Image(systemName: "doc.on.clipboard")
+                .font(.system(size: 13)).frame(width: 16)
+                .foregroundStyle(selected ? accent : Color.white.opacity(0.55))
+            Text(clip.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "\n", with: " "))
+                .font(.system(size: 13)).lineLimit(1)
+            Spacer(minLength: 6)
+        }
+        .foregroundStyle(selected ? Color.white : Color.white.opacity(0.82))
+        .padding(.horizontal, 10).padding(.vertical, 7)
+        .background(RoundedRectangle(cornerRadius: 8).fill(selected ? accent.opacity(0.20) : .clear))
+        .contentShape(Rectangle())
+        .onTapGesture {
+            model.selectedIndex = index
+            onActivate()
+        }
     }
 
     @ViewBuilder
@@ -50,7 +109,7 @@ struct QuickInsertView: View {
                     row(entry, index: index)
                 }
                 if case .chain? = model.selected {
-                    Text("⏎ paste next · → open steps")
+                    Text("⏎ paste next · → open steps · ⇥ switch tab")
                         .font(.system(size: 10)).foregroundStyle(.tertiary)
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.vertical, 6)

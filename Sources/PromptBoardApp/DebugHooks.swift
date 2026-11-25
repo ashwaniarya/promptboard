@@ -32,6 +32,10 @@ enum DebugHooks {
     static let chainStateNotification = "com.arya.PromptBoard.debug.chainState"
     static let chainRestartNotification = "com.arya.PromptBoard.debug.chainRestart"
     static let chainRowEnterNotification = "com.arya.PromptBoard.debug.chainRowEnter"
+    static let switchTabNotification = "com.arya.PromptBoard.debug.switchTab"
+    static let clipboardListNotification = "com.arya.PromptBoard.debug.clipboardList"
+    static let pasteFirstClipNotification = "com.arya.PromptBoard.debug.pasteFirstClip"
+    static let chainOpenStepsNotification = "com.arya.PromptBoard.debug.chainOpenSteps"
 
     static var isEnabled: Bool {
         ProcessInfo.processInfo.environment["PROMPTBOARD_DEBUG"] == "1"
@@ -78,6 +82,10 @@ enum DebugHooks {
             (chainStateNotification, #selector(DebugHookTarget.handleChainState(_:))),
             (chainRestartNotification, #selector(DebugHookTarget.handleChainRestart(_:))),
             (chainRowEnterNotification, #selector(DebugHookTarget.handleChainRowEnter(_:))),
+            (switchTabNotification, #selector(DebugHookTarget.handleSwitchTab(_:))),
+            (clipboardListNotification, #selector(DebugHookTarget.handleClipboardList(_:))),
+            (pasteFirstClipNotification, #selector(DebugHookTarget.handlePasteFirstClip(_:))),
+            (chainOpenStepsNotification, #selector(DebugHookTarget.handleChainOpenSteps(_:))),
         ]
         for (name, selector) in hooks {
             center.addObserver(
@@ -115,7 +123,11 @@ private final class DebugHookTarget: NSObject {
         let outputPath = notification.object as? String ?? "/tmp/promptboard-snapshot.png"
         MainActor.assumeIsolated {
             NSLog("%@", "PromptBoardDebug snapshot -> \(outputPath)")
-            overlayController.writeContentSnapshot(to: outputPath)
+            if quickInsertController.isVisible {
+                OverlayController.writeSnapshot(of: quickInsertController.contentView, to: outputPath)
+            } else {
+                overlayController.writeContentSnapshot(to: outputPath)
+            }
         }
     }
 
@@ -322,6 +334,44 @@ private final class DebugHookTarget: NSObject {
             let pasted = model.activate()
             let after = model.progressView(for: chain)
             NSLog("%@", "PromptBoardDebug chainRowEnter chain=\(chain.title) before=done:\(before.isDone),current:\(before.currentIndex.map(String.init) ?? "nil") after=done:\(after.isDone),current:\(after.currentIndex.map(String.init) ?? "nil") pasted=\(pasted != nil) observedChange=\(observedChange)")
+        }
+    }
+
+    // Same path as ⇥ in the popup.
+    @objc nonisolated func handleSwitchTab(_ notification: Notification) {
+        MainActor.assumeIsolated {
+            let model = quickInsertController.model
+            model.switchTab()
+            NSLog("%@", "PromptBoardDebug switchTab tab=\(model.tab.rawValue) visible=\(model.visibleCount) selected=\(model.selectedIndex)")
+        }
+    }
+
+    // object = optional search query; logs history size and the clipboard-tab matches.
+    @objc nonisolated func handleClipboardList(_ notification: Notification) {
+        let query = notification.object as? String ?? ""
+        MainActor.assumeIsolated {
+            let model = quickInsertController.model
+            let matches = model.clipboardHistory.matches(query)
+            let shown = matches.map { $0.prefix(40).replacingOccurrences(of: "\n", with: "⏎") }.joined(separator: " | ")
+            NSLog("%@", "PromptBoardDebug clipboardList query=\(query) total=\(model.clipboardHistory.items.count) matches=\(matches.count): \(shown)")
+        }
+    }
+
+    // Same path as → on the selected chain row in the popup.
+    @objc nonisolated func handleChainOpenSteps(_ notification: Notification) {
+        let query = notification.object as? String ?? ""
+        MainActor.assumeIsolated {
+            let model = quickInsertController.model
+            model.query = query
+            model.selectedIndex = 0
+            NSLog("%@", "PromptBoardDebug chainOpenSteps opened=\(model.openSteps())")
+        }
+    }
+
+    @objc nonisolated func handlePasteFirstClip(_ notification: Notification) {
+        let query = notification.object as? String ?? ""
+        MainActor.assumeIsolated {
+            quickInsertController.debugPasteFirstClip(query: query)
         }
     }
 
