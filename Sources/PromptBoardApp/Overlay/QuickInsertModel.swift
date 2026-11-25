@@ -28,6 +28,8 @@ final class QuickInsertModel {
     var clipboardHistory = ClipboardHistory()
     var selectedIndex = 0
     private(set) var stepList: ChainStepList?
+    private(set) var chainDraft: ChainDraft?
+    private(set) var chainSaveError: String?
     // chain-state.json is not observable; bumping this redraws rows that read progress.
     private var progressRevision = 0
 
@@ -44,6 +46,11 @@ final class QuickInsertModel {
     }
 
     var visibleCount: Int { tab == .prompts ? results.count : clipboardResults.count }
+
+    // The prompts tab ends with a "New chain" row one past the results.
+    private var navigableCount: Int { tab == .prompts ? results.count + 1 : clipboardResults.count }
+
+    var isNewChainRowSelected: Bool { tab == .prompts && stepList == nil && selectedIndex == results.count }
 
     var selected: LibraryEntry? {
         guard tab == .prompts else { return nil }
@@ -77,6 +84,8 @@ final class QuickInsertModel {
         tab = .prompts
         selectedIndex = 0
         stepList = nil
+        chainDraft = nil
+        chainSaveError = nil
     }
 
     func moveDown() {
@@ -84,7 +93,7 @@ final class QuickInsertModel {
             stepList?.moveDown()
             return
         }
-        let count = visibleCount
+        let count = navigableCount
         guard count > 0 else { return }
         selectedIndex = min(selectedIndex + 1, count - 1)
     }
@@ -94,7 +103,7 @@ final class QuickInsertModel {
             stepList?.moveUp()
             return
         }
-        guard visibleCount > 0 else { return }
+        guard navigableCount > 0 else { return }
         selectedIndex = max(selectedIndex - 1, 0)
     }
 
@@ -122,6 +131,10 @@ final class QuickInsertModel {
             }
         }
         if tab == .clipboard { return selectedClip }
+        if isNewChainRowSelected {
+            beginNewChain()
+            return nil
+        }
         switch selected {
         case .prompt(let prompt):
             return prompt.content
@@ -162,6 +175,63 @@ final class QuickInsertModel {
             stepList = stepList(for: chain)
         }
         progressRevision += 1
+    }
+
+    func beginNewChain() {
+        stepList = nil
+        chainSaveError = nil
+        chainDraft = ChainDraft()
+    }
+
+    func beginEditSelectedChain() -> Bool {
+        guard stepList == nil, case .chain(let chain)? = selected else { return false }
+        chainSaveError = nil
+        chainDraft = ChainDraft(chain: chain)
+        return true
+    }
+
+    func cancelChainDraft() {
+        chainDraft = nil
+        chainSaveError = nil
+    }
+
+    // Back to the list with the saved chain selected; on failure the draft stays open.
+    @discardableResult
+    func saveChainDraft() -> Bool {
+        guard let chainDraft else { return false }
+        guard chainDraft.canSave else {
+            chainSaveError = "Needs a title and no empty custom steps."
+            return false
+        }
+        guard let saved = store.saveChain(chainDraft) else {
+            chainSaveError = "Could not save: this chain was moved or deleted on disk."
+            return false
+        }
+        self.chainDraft = nil
+        chainSaveError = nil
+        query = ""
+        selectedIndex = results.firstIndex { $0.id == saved.id } ?? 0
+        return true
+    }
+
+    var pickerRows: [ChainDraft.PickerRow] { chainDraft?.pickerRows(in: store.items) ?? [] }
+
+    func movePicker(by offset: Int) { chainDraft?.movePicker(by: offset, in: store.items) }
+
+    func addPickedStep() { chainDraft?.addPicked(in: store.items) }
+
+    func addTypedCustomStep() {
+        guard let typed = chainDraft?.query else { return }
+        chainDraft?.addCustom(typed)
+    }
+
+    func updateChainDraft(_ change: (inout ChainDraft) -> Void) {
+        guard chainDraft != nil else { return }
+        change(&chainDraft!)
+    }
+
+    func promptTitle(for id: UUID) -> String? {
+        store.prompts.first { $0.id == id }?.title
     }
 
     private func saveProgress(_ index: Int, for chain: Chain) {

@@ -36,6 +36,7 @@ enum DebugHooks {
     static let clipboardListNotification = "com.arya.PromptBoard.debug.clipboardList"
     static let pasteFirstClipNotification = "com.arya.PromptBoard.debug.pasteFirstClip"
     static let chainOpenStepsNotification = "com.arya.PromptBoard.debug.chainOpenSteps"
+    static let chainEditorNotification = "com.arya.PromptBoard.debug.chainEditor"
 
     static var isEnabled: Bool {
         ProcessInfo.processInfo.environment["PROMPTBOARD_DEBUG"] == "1"
@@ -86,6 +87,7 @@ enum DebugHooks {
             (clipboardListNotification, #selector(DebugHookTarget.handleClipboardList(_:))),
             (pasteFirstClipNotification, #selector(DebugHookTarget.handlePasteFirstClip(_:))),
             (chainOpenStepsNotification, #selector(DebugHookTarget.handleChainOpenSteps(_:))),
+            (chainEditorNotification, #selector(DebugHookTarget.handleChainEditor(_:))),
         ]
         for (name, selector) in hooks {
             center.addObserver(
@@ -365,6 +367,56 @@ private final class DebugHookTarget: NSObject {
             model.query = query
             model.selectedIndex = 0
             NSLog("%@", "PromptBoardDebug chainOpenSteps opened=\(model.openSteps())")
+        }
+    }
+
+    // Object is "verb:arg": new, edit:<query>, title:<text>, query:<text>, addLinked:<query>,
+    // addCustom:<text>, select:<index>, move:up|down, remove, save, cancel, dump. Logs the draft after.
+    @objc nonisolated func handleChainEditor(_ notification: Notification) {
+        let command = notification.object as? String ?? "dump"
+        let verb = command.prefix { $0 != ":" }
+        let argument = command.contains(":") ? String(command[command.index(after: command.firstIndex(of: ":")!)...]) : ""
+        MainActor.assumeIsolated {
+            if !quickInsertController.isVisible { quickInsertController.trigger() }
+            let model = quickInsertController.model
+            switch verb {
+            case "new": model.beginNewChain()
+            case "edit":
+                model.query = argument
+                model.selectedIndex = model.results.firstIndex { $0.kind == .chain } ?? 0
+                if !model.beginEditSelectedChain() { NSLog("%@", "PromptBoardDebug chainEditor: no chain for \(argument)") }
+            case "title": model.updateChainDraft { $0.title = argument }
+            case "query": model.updateChainDraft { $0.query = argument }
+            case "addLinked":
+                model.updateChainDraft { $0.query = argument }
+                model.addPickedStep()
+            case "addCustom":
+                model.updateChainDraft { $0.query = argument }
+                model.addTypedCustomStep()
+            case "select": model.updateChainDraft { $0.selectStep(Int(argument) ?? 0) }
+            case "move": model.updateChainDraft { $0.moveSelectedStep(by: argument == "up" ? -1 : 1) }
+            case "remove": model.updateChainDraft { $0.removeSelectedStep() }
+            case "save": NSLog("%@", "PromptBoardDebug chainEditor saved=\(model.saveChainDraft())")
+            case "cancel": model.cancelChainDraft()
+            default: break
+            }
+            guard let draft = model.chainDraft else {
+                NSLog("%@", "PromptBoardDebug chainEditor \(command) -> closed, selected=\(model.selected?.title ?? "-") error=\(model.chainSaveError ?? "-")")
+                return
+            }
+            let steps = draft.steps.map { step -> String in
+                switch step {
+                case .linked(let id): "@\(model.promptTitle(for: id) ?? "missing")"
+                case .custom(let text): "\"\(text)\""
+                }
+            }
+            let picker = model.pickerRows.map { row -> String in
+                switch row {
+                case .prompt(let prompt): prompt.title
+                case .custom(let text): "custom(\(text))"
+                }
+            }
+            NSLog("%@", "PromptBoardDebug chainEditor \(command) -> title=\(draft.title) steps=[\(steps.joined(separator: ", "))] selected=\(draft.selectedStep.map(String.init) ?? "-") picker=[\(picker.joined(separator: " | "))] pick=\(draft.pickerIndex) canSave=\(draft.canSave) error=\(model.chainSaveError ?? "-")")
         }
     }
 
