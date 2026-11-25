@@ -20,6 +20,8 @@ public enum PromptFilter {
                 matches(skill.name, trimmedQuery)
                     || matches(skill.description, trimmedQuery)
                     || matches(skill.body, trimmedQuery)
+            case .chain(let chain):
+                matches(chain.title, trimmedQuery) || matches(chain.customStepText, trimmedQuery)
             }
         }
     }

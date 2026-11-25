@@ -51,7 +51,10 @@ public struct LibraryRepository: Sendable {
         var items: [LibraryEntry] = []
         var skipped: [String] = []
         for url in promptFileURLs() {
-            if var prompt = readPrompt(at: url) {
+            if var chain = readChain(at: url) {
+                chain.group = Self.folderPath(of: url, underRoot: promptsDirectoryURL)
+                items.append(.chain(chain))
+            } else if var prompt = readPrompt(at: url) {
                 prompt.group = Self.folderPath(of: url, underRoot: promptsDirectoryURL)
                 items.append(.prompt(prompt))
             } else {
@@ -262,7 +265,8 @@ public struct LibraryRepository: Sendable {
     private func readPrompt(at url: URL) -> Prompt? {
         guard let text = try? String(contentsOf: url, encoding: .utf8) else { return nil }
         let doc = Frontmatter.parse(text)
-        guard let idString = doc.fields["id"], let id = UUID(uuidString: idString) else { return nil }
+        guard doc.fields["kind"] != "chain",
+              let idString = doc.fields["id"], let id = UUID(uuidString: idString) else { return nil }
         let created = doc.fields["createdAt"].flatMap(CanonicalJSON.date(from:)) ?? Date()
         let updated = doc.fields["updatedAt"].flatMap(CanonicalJSON.date(from:)) ?? created
         return Prompt(
@@ -283,6 +287,39 @@ public struct LibraryRepository: Sendable {
             ("updatedAt", CanonicalJSON.isoString(from: prompt.updatedAt)),
         ]
         let text = Frontmatter.render(fields: fields, body: prompt.content)
+        do {
+            try Data(text.utf8).write(to: url, options: .atomic)
+        } catch {
+            throw LibraryRepositoryError.ioFailure(underlying: error)
+        }
+    }
+
+    private func readChain(at url: URL) -> Chain? {
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else { return nil }
+        let doc = Frontmatter.parse(text)
+        guard doc.fields["kind"] == "chain",
+              let idString = doc.fields["id"], let id = UUID(uuidString: idString) else { return nil }
+        let created = doc.fields["createdAt"].flatMap(CanonicalJSON.date(from:)) ?? Date()
+        let updated = doc.fields["updatedAt"].flatMap(CanonicalJSON.date(from:)) ?? created
+        return Chain(
+            id: id,
+            title: doc.fields["title"] ?? "Untitled",
+            steps: ChainBody.parse(doc.body),
+            group: nil,
+            createdAt: created,
+            updatedAt: updated
+        )
+    }
+
+    func writeChain(_ chain: Chain, to url: URL) throws {
+        let fields: [(String, String)] = [
+            ("id", chain.id.uuidString),
+            ("kind", "chain"),
+            ("title", chain.title),
+            ("createdAt", CanonicalJSON.isoString(from: chain.createdAt)),
+            ("updatedAt", CanonicalJSON.isoString(from: chain.updatedAt)),
+        ]
+        let text = Frontmatter.render(fields: fields, body: ChainBody.render(chain.steps))
         do {
             try Data(text.utf8).write(to: url, options: .atomic)
         } catch {

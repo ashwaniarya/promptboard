@@ -297,6 +297,8 @@ public final class LibraryStore {
                 "p:\(prompt.id.uuidString):\(prompt.updatedAt.timeIntervalSince1970):\(prompt.content.count)"
             case .skill(let skill):
                 "s:\(skill.id.uuidString):\(skill.updatedAt.timeIntervalSince1970):\(skill.body.count)"
+            case .chain(let chain):
+                "c:\(chain.id.uuidString):\(chain.updatedAt.timeIntervalSince1970):\(chain.steps.count)"
             }
         }
         .sorted()

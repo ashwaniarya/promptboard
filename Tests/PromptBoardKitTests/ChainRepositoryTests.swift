@@ -1,0 +1,127 @@
+import Foundation
+import Testing
+@testable import PromptBoardKit
+
+struct ChainRepositoryTests {
+    private func temporaryDirectory() -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("PromptBoardChainTests-\(UUID().uuidString)", isDirectory: true)
+    }
+
+    private func promptsDir(_ base: URL) -> URL {
+        base.appendingPathComponent("Library/prompts", isDirectory: true)
+    }
+
+    @discardableResult
+    private func writeRawChain(in base: URL, folder: String = "Work", id: UUID = UUID(), promptID: UUID = UUID()) throws -> (url: URL, id: UUID) {
+        let directory = promptsDir(base).appendingPathComponent(folder, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let text = """
+        ---
+        id: \(id.uuidString)
+        kind: chain
+        title: Ship
+        createdAt: 2026-11-24T10:00:00Z
+        updatedAt: 2026-11-24T10:00:00Z
+        ---
+
+        - @\(promptID.uuidString)
+
+        ```
+        review it
+        ```
+
+        """
+        let url = directory.appendingPathComponent("ship.md")
+        try Data(text.utf8).write(to: url)
+        return (url, id)
+    }
+
+    private func chains(_ items: [LibraryEntry]) -> [Chain] {
+        items.compactMap { if case .chain(let chain) = $0 { chain } else { nil } }
+    }
+
+    @Test func loadRoutesChainFileToChainEntry() throws {
+        let directory = temporaryDirectory()
+        let (_, chainID) = try writeRawChain(in: directory)
+        let repository = LibraryRepository(directoryURL: directory, syncTargets: .temporary())
+
+        let items = try repository.load().items
+
+        let loaded = chains(items)
+        #expect(loaded.count == 1)
+        #expect(loaded.first?.steps.count == 2)
+        #expect(loaded.first?.group == "Work")
+        #expect(!items.contains { if case .prompt(let prompt) = $0 { prompt.id == chainID } else { false } })
+    }
+
+    @Test @MainActor func storePromptsExcludeChains() throws {
+        let directory = temporaryDirectory()
+        let (_, chainID) = try writeRawChain(in: directory)
+
+        let store = LibraryStore(directoryURL: directory, syncTargets: .temporary())
+
+        #expect(!store.prompts.contains { $0.id == chainID })
+        #expect(store.items.first { $0.id == chainID }?.kind == .chain)
+    }
+
+    @Test func promptMutationsIgnoreChainFiles() throws {
+        let directory = temporaryDirectory()
+        let (url, chainID) = try writeRawChain(in: directory)
+        let before = try Data(contentsOf: url)
+        let repository = LibraryRepository(directoryURL: directory, syncTargets: .temporary())
+
+        do {
+            try repository.updatePrompt(id: chainID, title: "x", content: nil)
+            Issue.record("expected promptNotFound")
+        } catch LibraryRepositoryError.promptNotFound(let id) {
+            #expect(id == chainID)
+        }
+        #expect(try Data(contentsOf: url) == before)
+    }
+
+    @Test func reconcileSyncDoesNotExportChains() throws {
+        let directory = temporaryDirectory()
+        try writeRawChain(in: directory)
+        let repository = LibraryRepository(directoryURL: directory, syncTargets: .temporary())
+
+        try repository.reconcileSync()
+
+        let exported = repository.exportSkillsURL.appendingPathComponent("ship")
+        #expect(!FileManager.default.fileExists(atPath: exported.path))
+    }
+
+    @Test func chainEntryCodableRoundTrip() throws {
+        let entry = LibraryEntry.chain(Chain(
+            title: "Ship", steps: [.linked(promptID: UUID()), .custom(text: "go")],
+            createdAt: Date(timeIntervalSince1970: 1_000), updatedAt: Date(timeIntervalSince1970: 2_000)
+        ))
+
+        let data = try CanonicalJSON.makeEncoder().encode(entry)
+
+        let object = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        #expect(object?["kind"] as? String == "chain")
+        #expect(try CanonicalJSON.makeDecoder().decode(LibraryEntry.self, from: data) == entry)
+    }
+
+    @Test func chainKindFoldersUsePromptsTree() throws {
+        let repository = LibraryRepository(directoryURL: temporaryDirectory(), syncTargets: .temporary())
+
+        #expect(try repository.folderURL(for: .chain, path: "A")
+            == repository.promptsDirectoryURL.appendingPathComponent("A", isDirectory: true))
+    }
+
+    @Test func writeChainThenLoadRoundTrips() throws {
+        let directory = temporaryDirectory()
+        let repository = LibraryRepository(directoryURL: directory, syncTargets: .temporary())
+        try repository.ensureLibraryDirectories()
+        let chain = Chain(
+            title: "Ship", steps: [.custom(text: "one"), .linked(promptID: UUID())],
+            createdAt: Date(timeIntervalSince1970: 1_000), updatedAt: Date(timeIntervalSince1970: 2_000)
+        )
+
+        try repository.writeChain(chain, to: repository.promptsDirectoryURL.appendingPathComponent("ship.md"))
+
+        #expect(chains(try repository.load().items) == [chain])
+    }
+}

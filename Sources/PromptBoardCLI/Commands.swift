@@ -3,12 +3,12 @@ import Foundation
 import PromptBoardKit
 
 struct List: ParsableCommand {
-    static let configuration = CommandConfiguration(abstract: "List prompts and skills, newest first.")
+    static let configuration = CommandConfiguration(abstract: "List prompts, skills and chains, newest first.")
 
     @Option(help: "Filter by title/content (case- and diacritic-insensitive).")
     var query: String?
 
-    @Option(help: "Only items of this kind: prompt or skill.")
+    @Option(help: "Only items of this kind: prompt, skill or chain.")
     var type: String?
 
     @Option(help: "Only items in this group.")
@@ -21,7 +21,7 @@ struct List: ParsableCommand {
 
     func validate() throws {
         if let type, LibraryEntry.Kind(rawValue: type) == nil {
-            throw ValidationError("--type must be prompt or skill")
+            throw ValidationError("--type must be prompt, skill or chain")
         }
     }
 
@@ -81,6 +81,8 @@ struct Get: ParsableCommand {
                 } else {
                     print(skill.body, terminator: "")
                 }
+            case .chain(let chain):
+                if json { try Output.printJSON(item) } else { print(ChainBody.render(chain.steps)) }
             }
         }
     }

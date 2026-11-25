@@ -101,6 +101,14 @@ struct ItemDetailView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
+        case .chain(let chain):
+            ScrollView {
+                Text(ChainBody.render(chain.steps))
+                    .font(.system(size: 13, design: .monospaced))
+                    .textSelection(.enabled)
+                    .padding(18)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
     }
 
@@ -166,6 +174,7 @@ struct ItemDetailView: View {
         switch item {
         case .prompt(let prompt): text = prompt.content
         case .skill(let skill): text = currentSkillText(skill)
+        case .chain(let chain): text = ChainBody.render(chain.steps)
         }
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()

@@ -60,6 +60,7 @@ final class AppState {
 
     var visibleItems: [LibraryEntry] {
         var items = store.items
+        if !Constants.chainsEnabled { items = items.filter { $0.kind != .chain } }
         if let selectedFolder {
             items = items.filter {
                 $0.group == selectedFolder || ($0.group?.hasPrefix(selectedFolder + "/") ?? false)
@@ -135,6 +136,7 @@ final class AppState {
         switch item {
         case .prompt(let prompt): text = prompt.content
         case .skill(let skill): text = skill.body.isEmpty ? skill.description : skill.body
+        case .chain(let chain): text = ChainBody.render(chain.steps)
         }
         let pasteboard = NSPasteboard.general
         // clearContents() is required before setString; skipping it makes the write silently fail
