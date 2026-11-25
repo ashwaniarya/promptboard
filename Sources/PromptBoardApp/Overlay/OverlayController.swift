@@ -99,7 +99,11 @@ final class OverlayController {
     }
 
     func writeContentSnapshot(to path: String) {
-        guard let contentView = panel?.contentView else {
+        Self.writeSnapshot(of: panel?.contentView, to: path)
+    }
+
+    static func writeSnapshot(of contentView: NSView?, to path: String) {
+        guard let contentView else {
             NSLog("%@", "PromptBoardDebug snapshot: no content view")
             return
         }

@@ -33,6 +33,7 @@ final class QuickInsertController {
     }
 
     var isVisible: Bool { panel?.isVisible ?? false }
+    var contentView: NSView? { panel?.contentView }
 
     func trigger() {
         // D4 gates on Accessibility permission here.
