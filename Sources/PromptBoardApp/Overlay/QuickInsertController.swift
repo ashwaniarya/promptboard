@@ -206,19 +206,23 @@ final class QuickInsertController {
         guard keyMonitor == nil else { return }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event -> NSEvent? in
             let keyCode = event.keyCode
-            let commandOnly = event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command
+            // Caps Lock is a toggle, and arrow keys always carry .function/.numericPad: none of them is a chord.
+            let chordFlags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+                .subtracting([.capsLock, .function, .numericPad])
+            let isCommandR = chordFlags == .command && event.charactersIgnoringModifiers?.lowercased() == "r"
+            let noChord = chordFlags.isEmpty
             // Extract the Sendable keyCode before hopping onto the main actor — NSEvent isn't Sendable.
             let handled = MainActor.assumeIsolated { () -> Bool in
                 guard let self else { return false }
                 switch keyCode {
+                case _ where isCommandR && self.model.stepList != nil:
+                    self.model.restart()
+                    return true
                 case 125: self.model.moveDown(); return true    // down arrow
                 case 126: self.model.moveUp(); return true       // up arrow
                 case 48: self.model.switchTab(); return true     // tab
                 case 36, 76: self.activateSelected(); return true  // return / keypad enter
-                case 15 where commandOnly && self.model.stepList != nil:  // ⌘R
-                    self.model.restart()
-                    return true
-                case 124 where self.model.openSteps(): return true  // right arrow
+                case 124 where noChord && self.model.openSteps(): return true  // right arrow
                 case 53:                                           // escape
                     if self.model.stepList != nil { self.model.closeStepList() } else { self.hide() }
                     return true
