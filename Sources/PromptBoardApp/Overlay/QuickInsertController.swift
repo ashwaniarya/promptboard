@@ -41,7 +41,7 @@ final class QuickInsertController {
         model.reset()
         position(panel)
         panel.makeKeyAndOrderFront(nil)
-        focusSearchField(in: panel)
+        focusField(placeholder: QuickInsertView.searchPlaceholder)
         installKeyMonitor()
     }
 
@@ -129,7 +129,113 @@ final class QuickInsertController {
     }
 
     private func activateSelected() {
-        if let text = model.activate() { insert(text) }
+        if let text = model.activate() {
+            insert(text)
+        } else if model.chainDraft != nil {
+            focusChainEditor()
+        } else if model.promptDraft != nil {
+            focusPromptEditor()
+        }
+    }
+
+    private func focusPromptEditor() {
+        if model.promptDraft?.title.isEmpty ?? true {
+            focusField(placeholder: QuickInsertView.promptTitlePlaceholder)
+            return
+        }
+        Task { @MainActor [weak self] in
+            for _ in 0..<10 {
+                try? await Task.sleep(for: .milliseconds(40))
+                guard let panel = self?.panel else { return }
+                if let textView = Self.collectTextViews(in: panel.contentView).first {
+                    panel.makeFirstResponder(textView)
+                    return
+                }
+            }
+        }
+    }
+
+    // A focused NSTextField hosts its field editor as a subview; only the TextEditor's view counts.
+    private static func collectTextViews(in view: NSView?) -> [NSTextView] {
+        guard let view else { return [] }
+        let own = (view as? NSTextView).map { $0.isFieldEditor || !$0.isEditable ? [] : [$0] } ?? []
+        return own + view.subviews.flatMap { collectTextViews(in: $0) }
+    }
+
+    private func leavePromptEditor(saving: Bool) {
+        if saving {
+            guard model.savePromptDraft() else { return }
+        } else {
+            model.cancelPromptDraft()
+        }
+        focusField(placeholder: QuickInsertView.searchPlaceholder)
+    }
+
+    // Back button and esc: drop any open draft unsaved and return to the list.
+    func backToList() {
+        model.cancelChainDraft()
+        model.cancelPromptDraft()
+        focusField(placeholder: QuickInsertView.searchPlaceholder)
+    }
+
+    private func editSelected() {
+        guard model.beginEditSelected() else { return }
+        if model.chainDraft != nil { focusChainEditor() } else { focusPromptEditor() }
+    }
+
+    private func focusChainEditor() {
+        let needsTitle = model.chainDraft?.chainID == nil && model.chainDraft?.title.isEmpty ?? true
+        focusField(placeholder: needsTitle ? QuickInsertView.chainTitlePlaceholder : QuickInsertView.stepSearchPlaceholder)
+    }
+
+    private func leaveChainEditor(saving: Bool) {
+        if saving {
+            guard model.saveChainDraft() else { return }
+        } else {
+            model.cancelChainDraft()
+        }
+        focusField(placeholder: QuickInsertView.searchPlaceholder)
+    }
+
+    private var isStepSearchFocused: Bool {
+        guard let editor = panel?.firstResponder as? NSTextView, let field = editor.delegate as? NSTextField else { return false }
+        return field.placeholderString == QuickInsertView.stepSearchPlaceholder
+            || field.placeholderAttributedString?.string == QuickInsertView.stepSearchPlaceholder
+    }
+
+    // Keys while the chain editor is open. ⏎ adds only from the step search field;
+    // elsewhere (title, custom step text) it jumps there instead.
+    private func handleChainEditorKey(keyCode: UInt16, chordFlags: NSEvent.ModifierFlags, character: String?) -> Bool {
+        switch keyCode {
+        case 125, 126:
+            let offset = keyCode == 125 ? 1 : -1
+            if chordFlags == .option {
+                model.updateChainDraft { $0.moveSelectedStep(by: offset) }
+            } else {
+                model.movePicker(by: offset)
+            }
+            return true
+        case 36, 76:
+            if chordFlags == .command {
+                model.addTypedCustomStep()
+            } else if isStepSearchFocused {
+                model.addPickedStep()
+            } else {
+                focusField(placeholder: QuickInsertView.stepSearchPlaceholder)
+            }
+            return true
+        case 51 where chordFlags == .command:
+            model.updateChainDraft { $0.removeSelectedStep() }
+            return true
+        case 53:
+            leaveChainEditor(saving: false)
+            return true
+        case _ where chordFlags == .command && character == "s":
+            leaveChainEditor(saving: true)
+            return true
+        default:
+            return false
+        }
     }
 
     private func ensurePanel() -> OverlayPanel {
@@ -153,7 +259,12 @@ final class QuickInsertController {
         panel.appearance = NSAppearance(named: .darkAqua)
         panel.onCancel = { [weak self] in self?.hide() }
         panel.contentViewController = NSHostingController(
-            rootView: QuickInsertView(model: model, onActivate: { [weak self] in self?.activateSelected() })
+            rootView: QuickInsertView(
+                model: model,
+                onActivate: { [weak self] in self?.activateSelected() },
+                onEdit: { [weak self] in self?.editSelected() },
+                onBack: { [weak self] in self?.backToList() }
+            )
         )
         self.panel = panel
         return panel
@@ -185,14 +296,13 @@ final class QuickInsertController {
     }
 
     // @FocusState is ignored in a non-activating panel; move focus via AppKit.
-    private func focusSearchField(in panel: OverlayPanel) {
+    private func focusField(placeholder: String) {
         Task { @MainActor [weak self] in
             for _ in 0..<10 {
                 try? await Task.sleep(for: .milliseconds(40))
                 guard self != nil, let panel = self?.panel else { return }
                 let field = OverlayController.collectTextFields(in: panel.contentView).first {
-                    $0.placeholderString == QuickInsertView.searchPlaceholder
-                        || $0.placeholderAttributedString?.string == QuickInsertView.searchPlaceholder
+                    $0.placeholderString == placeholder || $0.placeholderAttributedString?.string == placeholder
                 }
                 if let field {
                     panel.makeFirstResponder(field)
@@ -209,12 +319,35 @@ final class QuickInsertController {
             // Caps Lock is a toggle, and arrow keys always carry .function/.numericPad: none of them is a chord.
             let chordFlags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
                 .subtracting([.capsLock, .function, .numericPad])
-            let isCommandR = chordFlags == .command && event.charactersIgnoringModifiers?.lowercased() == "r"
+            let character = event.charactersIgnoringModifiers?.lowercased()
+            let isCommandR = chordFlags == .command && character == "r"
             let noChord = chordFlags.isEmpty
             // Extract the Sendable keyCode before hopping onto the main actor — NSEvent isn't Sendable.
             let handled = MainActor.assumeIsolated { () -> Bool in
                 guard let self else { return false }
+                if self.model.chainDraft != nil {
+                    return self.handleChainEditorKey(keyCode: keyCode, chordFlags: chordFlags, character: character)
+                }
+                if self.model.promptDraft != nil {
+                    switch keyCode {
+                    case 53: self.leavePromptEditor(saving: false); return true
+                    case _ where chordFlags == .command && character == "s": self.leavePromptEditor(saving: true); return true
+                    default: return false
+                    }
+                }
+                let inPromptList = self.model.tab == .prompts && self.model.stepList == nil
                 switch keyCode {
+                case _ where inPromptList && chordFlags == .command && character == "e":
+                    self.editSelected()
+                    return true
+                case _ where inPromptList && chordFlags == .command && character == "n":
+                    self.model.beginNewChain()
+                    self.focusChainEditor()
+                    return true
+                case _ where inPromptList && chordFlags == [.command, .shift] && character == "n":
+                    self.model.beginNewPrompt()
+                    self.focusPromptEditor()
+                    return true
                 case _ where isCommandR && self.model.stepList != nil:
                     self.model.restart()
                     return true
