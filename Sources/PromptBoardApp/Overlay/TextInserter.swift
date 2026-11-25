@@ -7,12 +7,13 @@ import CoreGraphics
 // Clipboard restore is string-only (an approved v1 limitation).
 @MainActor
 enum TextInserter {
+    static let transientType = NSPasteboard.PasteboardType("org.nspasteboard.TransientType")
+
     static func insert(_ text: String) {
         let pasteboard = NSPasteboard.general
         let saved = pasteboard.string(forType: .string)
 
-        pasteboard.clearContents()
-        pasteboard.setString(text, forType: .string)
+        writeTransient(text, to: pasteboard)
         paste()
 
         // Restore the previous clipboard once the paste has been delivered.
@@ -21,9 +22,16 @@ enum TextInserter {
             let pasteboard = NSPasteboard.general
             pasteboard.clearContents()
             if let saved {
-                pasteboard.setString(saved, forType: .string)
+                writeTransient(saved, to: pasteboard)
             }
         }
+    }
+
+    // Transient marks these writes as ours, so clipboard history (ours and others') skips them.
+    private static func writeTransient(_ text: String, to pasteboard: NSPasteboard) {
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+        pasteboard.setData(Data(), forType: transientType)
     }
 
     private static func paste() {

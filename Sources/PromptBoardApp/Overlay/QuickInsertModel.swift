@@ -11,12 +11,21 @@ final class QuickInsertModel {
     private let store: LibraryStore
     private let maxResults = 8
 
+    enum Tab: String { case prompts, clipboard }
+
     var query = "" {
         didSet {
             selectedIndex = 0
             stepList = nil
         }
     }
+    var tab = Tab.prompts {
+        didSet {
+            selectedIndex = 0
+            stepList = nil
+        }
+    }
+    var clipboardHistory = ClipboardHistory()
     var selectedIndex = 0
     private(set) var stepList: ChainStepList?
     // chain-state.json is not observable; bumping this redraws rows that read progress.
@@ -30,10 +39,28 @@ final class QuickInsertModel {
         Array(PromptFilter.quickInsertResults(store.items, query: query).prefix(maxResults))
     }
 
+    var clipboardResults: [String] {
+        Array(clipboardHistory.matches(query).prefix(maxResults))
+    }
+
+    var visibleCount: Int { tab == .prompts ? results.count : clipboardResults.count }
+
     var selected: LibraryEntry? {
+        guard tab == .prompts else { return nil }
         let current = results
         guard current.indices.contains(selectedIndex) else { return nil }
         return current[selectedIndex]
+    }
+
+    var selectedClip: String? {
+        guard tab == .clipboard else { return nil }
+        let current = clipboardResults
+        guard current.indices.contains(selectedIndex) else { return nil }
+        return current[selectedIndex]
+    }
+
+    func switchTab() {
+        tab = tab == .prompts ? .clipboard : .prompts
     }
 
     func stepList(for chain: Chain) -> ChainStepList {
@@ -50,6 +77,7 @@ final class QuickInsertModel {
 
     func reset() {
         query = ""
+        tab = .prompts
         selectedIndex = 0
         stepList = nil
     }
@@ -59,7 +87,7 @@ final class QuickInsertModel {
             stepList?.moveDown()
             return
         }
-        let count = results.count
+        let count = visibleCount
         guard count > 0 else { return }
         selectedIndex = min(selectedIndex + 1, count - 1)
     }
@@ -69,7 +97,7 @@ final class QuickInsertModel {
             stepList?.moveUp()
             return
         }
-        guard !results.isEmpty else { return }
+        guard visibleCount > 0 else { return }
         selectedIndex = max(selectedIndex - 1, 0)
     }
 
@@ -96,6 +124,7 @@ final class QuickInsertModel {
                 return nil
             }
         }
+        if tab == .clipboard { return selectedClip }
         switch selected {
         case .prompt(let prompt):
             return prompt.content
