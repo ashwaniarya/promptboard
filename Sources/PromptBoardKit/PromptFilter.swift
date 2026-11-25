@@ -39,27 +39,40 @@ public enum PromptFilter {
         text.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil
     }
 
-    // Prompts-only ranking for the cursor quick-insert popup. The prompt's slug
-    // (recomputed from its title) doubles as a `/alias`. Ranked, best first:
-    // exact alias, alias prefix, title substring, content substring. Stable within a tier.
     public static func quickInsertResults(_ prompts: [Prompt], query: String) -> [Prompt] {
+        quickInsertResults(prompts.map(LibraryEntry.prompt), query: query)
+            .compactMap { if case .prompt(let prompt) = $0 { prompt } else { nil } }
+    }
+
+    // Ranking for the cursor quick-insert popup over prompts and chains (skills dropped).
+    // The slug (recomputed from the title) doubles as a `/alias`. Ranked, best first:
+    // exact alias, alias prefix, title substring, content substring. Stable within a tier.
+    // A chain's content is its custom step text; linked prompt content is not searched.
+    public static func quickInsertResults(_ entries: [LibraryEntry], query: String) -> [LibraryEntry] {
+        let insertable = entries.filter { $0.kind != .skill }
         var normalized = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if normalized.hasPrefix("/") { normalized.removeFirst() }
-        guard !normalized.isEmpty else { return prompts }
+        guard !normalized.isEmpty else { return insertable }
 
-        func rank(_ prompt: Prompt) -> Int? {
-            let alias = Slug.make(from: prompt.title)
+        func rank(_ entry: LibraryEntry) -> Int? {
+            let content: String
+            switch entry {
+            case .prompt(let prompt): content = prompt.content
+            case .chain(let chain): content = chain.customStepText
+            case .skill: return nil
+            }
+            let alias = Slug.make(from: entry.title)
             if alias == normalized { return 0 }
             if alias.hasPrefix(normalized) { return 1 }
-            if matches(prompt.title, normalized) { return 2 }
-            if matches(prompt.content, normalized) { return 3 }
+            if matches(entry.title, normalized) { return 2 }
+            if matches(content, normalized) { return 3 }
             return nil
         }
 
-        return prompts
+        return insertable
             .enumerated()
-            .compactMap { index, prompt in rank(prompt).map { (index: index, tier: $0, prompt: prompt) } }
+            .compactMap { index, entry in rank(entry).map { (index: index, tier: $0, entry: entry) } }
             .sorted { $0.tier != $1.tier ? $0.tier < $1.tier : $0.index < $1.index }
-            .map(\.prompt)
+            .map(\.entry)
     }
 }
