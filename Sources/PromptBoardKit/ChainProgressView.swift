@@ -23,7 +23,11 @@ public struct ChainProgressView: Equatable, Sendable {
     }
 
     public init(stepList: ChainStepList) {
-        let currentIndex = stepList.selectedIndex
+        // From stored progress, not selectedIndex: arrow picks move only the highlight.
+        let currentIndex = stepList.rows.indices.first { index in
+            guard index >= stepList.progressIndex, case .ready = stepList.rows[index] else { return false }
+            return true
+        }
         self.currentIndex = currentIndex
         segments = stepList.rows.indices.map { index in
             guard case .ready = stepList.rows[index] else { return .missing }

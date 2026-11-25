@@ -82,6 +82,29 @@ struct ChainProgressViewTests {
         #expect(view(threeSteps, progress: 1).rowTags == [.linked, .now, .custom])
     }
 
+    @Test func arrowPicksNeverMoveCurrent() {
+        var stepList = ChainStepList(chain: Chain(title: "Ship", steps: threeSteps), prompts: [spec, plan], progressIndex: 2)
+        stepList.moveUp()
+        stepList.moveUp()
+        let progressView = ChainProgressView(stepList: stepList)
+        #expect(stepList.selectedIndex == 0)
+        #expect(progressView.segments == [.done, .done, .current])
+        #expect(progressView.rowTags == [.linked, .linked, .now])
+        #expect(progressView.currentIndex == 2)
+        #expect(progressView.completedCount == 2)
+        #expect(progressView.nextPreview == "review")
+    }
+
+    @Test func arrowPickOnDoneChainKeepsItDone() {
+        var stepList = ChainStepList(chain: Chain(title: "Ship", steps: threeSteps), prompts: [spec, plan], progressIndex: 3)
+        stepList.moveUp()
+        let progressView = ChainProgressView(stepList: stepList)
+        #expect(stepList.selectedIndex == 2)
+        #expect(progressView.isDone)
+        #expect(progressView.segments == [.done, .done, .done])
+        #expect(progressView.completedCount == 3)
+    }
+
     @Test func stepListExposesProgressIndex() {
         let chain = Chain(title: "Ship", steps: threeSteps)
         let stepList = ChainStepList(chain: chain, prompts: [spec, plan], progressIndex: 2)

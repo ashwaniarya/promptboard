@@ -50,7 +50,12 @@ final class QuickInsertController {
             NSLog("%@", "PromptBoardDebug debugInsertFirst: no result for \(query)")
             return
         }
-        debugActivate(step: nil, label: "debugInsertFirst inserting: \(entry.title) kind=\(entry.kind.rawValue)")
+        guard let text = model.activate() else {
+            NSLog("%@", "PromptBoardDebug debugInsertFirst \(entry.title) nothing to paste")
+            return
+        }
+        NSLog("%@", "PromptBoardDebug debugInsertFirst inserting: \(entry.title) kind=\(entry.kind.rawValue) pasted=\(text.prefix(40))")
+        performInsert(text)
     }
 
     // Debug-only: open the first chain for a query and pick step `step` (0-based),
@@ -62,20 +67,12 @@ final class QuickInsertController {
             NSLog("%@", "PromptBoardDebug chainPick: no chain for \(query)")
             return
         }
-        debugActivate(step: step, label: "chainPick chain=\(chain.title)")
-    }
-
-    private func debugActivate(step: Int?, label: String) {
-        if let text = model.activate() {
-            NSLog("%@", "PromptBoardDebug \(label)")
-            performInsert(text)
-            return
-        }
-        guard let stepList = model.stepList else {
+        let label = "chainPick chain=\(chain.title)"
+        guard model.openSteps(), let stepList = model.stepList else {
             NSLog("%@", "PromptBoardDebug \(label) nothing to paste")
             return
         }
-        if let step, !stepList.isDone { model.selectStep(step) }
+        if !stepList.isDone { model.selectStep(step) }
         let peek = model.stepList?.activate()
         guard let text = model.activate(), case .paste(_, let nextIndex)? = peek else {
             NSLog("%@", "PromptBoardDebug \(label) done -> restart")
@@ -189,6 +186,7 @@ final class QuickInsertController {
                 case 15 where commandOnly && self.model.stepList != nil:  // ⌘R
                     self.model.restart()
                     return true
+                case 124 where self.model.openSteps(): return true  // right arrow
                 case 53:                                           // escape
                     if self.model.stepList != nil { self.model.closeStepList() } else { self.hide() }
                     return true

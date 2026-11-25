@@ -19,6 +19,8 @@ final class QuickInsertModel {
     }
     var selectedIndex = 0
     private(set) var stepList: ChainStepList?
+    // chain-state.json is not observable; bumping this redraws rows that read progress.
+    private var progressRevision = 0
 
     init(store: LibraryStore) {
         self.store = store
@@ -35,7 +37,8 @@ final class QuickInsertModel {
     }
 
     func stepList(for chain: Chain) -> ChainStepList {
-        ChainStepList(
+        _ = progressRevision
+        return ChainStepList(
             chain: chain, prompts: store.prompts,
             progressIndex: store.chainProgress.index(for: chain.id, stepCount: chain.steps.count)
         )
@@ -79,7 +82,7 @@ final class QuickInsertModel {
     }
 
     // Returns the text to paste, or nil when the action only changed popup state
-    // (opened a chain's step list, or restarted a finished chain).
+    // (restarted a finished chain).
     func activate() -> String? {
         if let stepList {
             switch stepList.activate() {
@@ -97,12 +100,31 @@ final class QuickInsertModel {
         case .prompt(let prompt):
             return prompt.content
         case .chain(let chain):
-            let opened = stepList(for: chain)
-            if !opened.isEmpty { stepList = opened }
-            return nil
+            return pasteNext(for: chain)
         case .skill, nil:
             return nil
         }
+    }
+
+    func pasteNext(for chain: Chain) -> String? {
+        switch stepList(for: chain).activate() {
+        case .paste(let text, let nextIndex):
+            saveProgress(nextIndex, for: chain)
+            return text
+        case .restart:
+            saveProgress(0, for: chain)
+            return nil
+        case .nothing:
+            return nil
+        }
+    }
+
+    func openSteps() -> Bool {
+        guard stepList == nil, case .chain(let chain)? = selected else { return false }
+        let opened = stepList(for: chain)
+        guard !opened.isEmpty else { return false }
+        stepList = opened
+        return true
     }
 
     func restart() {
@@ -112,6 +134,7 @@ final class QuickInsertModel {
         } catch {
             NSLog("%@", "PromptBoard: could not reset chain progress: \(error)")
         }
+        progressRevision += 1
         stepList = stepList(for: chain)
     }
 
@@ -121,5 +144,6 @@ final class QuickInsertModel {
         } catch {
             NSLog("%@", "PromptBoard: could not save chain progress: \(error)")
         }
+        progressRevision += 1
     }
 }
