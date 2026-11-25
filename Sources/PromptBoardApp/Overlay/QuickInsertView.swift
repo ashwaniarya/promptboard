@@ -350,9 +350,12 @@ struct QuickInsertView: View {
                 .textFieldStyle(.plain).font(.system(size: 13)).lineLimit(1...4)
             }
             Spacer(minLength: 6)
-            stepControl("chevron.up", index: index, help: "Move up (⌥↑)", hidden: index == 0) { $0.moveSelectedStep(by: -1) }
-            stepControl("chevron.down", index: index, help: "Move down (⌥↓)", hidden: index == stepCount - 1) { $0.moveSelectedStep(by: 1) }
-            stepControl("xmark", index: index, help: "Remove step (⌘⌫)") { $0.removeSelectedStep() }
+            // Zero spacing: a click in a gap between controls would fall through to the row's tap and only select it.
+            HStack(spacing: 0) {
+                stepControl("arrow.up", index: index, help: "Move up (⌥↑)", hidden: index == 0) { $0.moveSelectedStep(by: -1) }
+                stepControl("arrow.down", index: index, help: "Move down (⌥↓)", hidden: index == stepCount - 1) { $0.moveSelectedStep(by: 1) }
+                stepControl("trash", index: index, help: "Remove step (⌘⌫)", hoverColor: .red) { $0.removeSelectedStep() }
+            }
         }
         .foregroundStyle(selected ? Color.white : Color.white.opacity(0.82))
         .padding(.horizontal, 10).padding(.vertical, 7)
@@ -361,21 +364,14 @@ struct QuickInsertView: View {
         .onTapGesture { model.updateChainDraft { $0.selectStep(index) } }
     }
 
-    private func stepControl(_ symbol: String, index: Int, help: String, hidden: Bool = false,
+    private func stepControl(_ symbol: String, index: Int, help: String, hidden: Bool = false, hoverColor: Color = .white,
                              action: @escaping (inout ChainDraft) -> Void) -> some View {
-        Button {
+        StepControlButton(symbol: symbol, help: help, hoverColor: hoverColor) {
             model.updateChainDraft { draft in
                 draft.selectStep(index)
                 action(&draft)
             }
-        } label: {
-            Image(systemName: symbol).font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.55))
-                .frame(width: 18, height: 18)
-                .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .help(help)
         .opacity(hidden ? 0 : 1)
         .disabled(hidden)
     }
@@ -502,5 +498,26 @@ struct QuickInsertView: View {
             model.selectStep(index)
             onActivate()
         }
+    }
+}
+
+private struct StepControlButton: View {
+    let symbol: String
+    let help: String
+    let hoverColor: Color
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol).font(.system(size: 13, weight: .medium))
+                .foregroundStyle(hovering ? hoverColor : Color.secondary)
+                .frame(width: 26, height: 26)
+                .background(RoundedRectangle(cornerRadius: 6).fill(.white.opacity(hovering ? 0.10 : 0)))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .onHover { hovering = $0 }
+        .help(help)
     }
 }

@@ -441,6 +441,18 @@ private final class DebugHookTarget: NSObject {
             case "save": NSLog("%@", "PromptBoardDebug chainEditor saved=\(model.saveChainDraft())")
             case "cancel": model.cancelChainDraft()
             case "back": quickInsertController.backToList()
+            case "click":
+                // mouseDown/mouseUp through NSWindow.sendEvent at a top-left point, so hit testing and gestures run as for a user click.
+                let coordinates = argument.split(separator: ",").compactMap { Double($0) }
+                if coordinates.count == 2, let view = quickInsertController.contentView, let window = view.window {
+                    let location = NSPoint(x: coordinates[0], y: view.frame.height - coordinates[1])
+                    for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+                        if let event = NSEvent.mouseEvent(with: type, location: location, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                                          windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1) {
+                            window.sendEvent(event)
+                        }
+                    }
+                }
             default: break
             }
             guard let draft = model.chainDraft else {
