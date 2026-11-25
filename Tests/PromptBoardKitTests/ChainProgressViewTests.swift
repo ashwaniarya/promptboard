@@ -70,6 +70,14 @@ struct ChainProgressViewTests {
         #expect(view([.custom(text: "\n\nreview\nit all")]).nextPreview == "review")
     }
 
+    @Test func previewSkipsWhitespaceOnlyLines() {
+        #expect(view([.custom(text: "  \n\t\nreview\nit all")]).nextPreview == "review")
+    }
+
+    @Test func previewSplitsWindowsLineEndings() {
+        #expect(view([.custom(text: "\r\n \r\nreview\r\nit all")]).nextPreview == "review")
+    }
+
     @Test func previewTruncatesAtSixtyCharacters() {
         let long = view([.custom(text: String(repeating: "x", count: 200))]).nextPreview
         #expect(long?.count == 60)
