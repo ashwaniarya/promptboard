@@ -24,6 +24,10 @@ public final class LibraryStore {
         items.compactMap { if case .prompt(let prompt) = $0 { prompt } else { nil } }
     }
 
+    public var chains: [Chain] {
+        items.compactMap { if case .chain(let chain) = $0 { chain } else { nil } }
+    }
+
     public var groups: [String] {
         var seen = Set<String>()
         var ordered: [String] = []
@@ -65,13 +69,46 @@ public final class LibraryStore {
         }
     }
 
-    // Routes by id: a prompt if one matches, otherwise a skill.
+    // MARK: - Chain mutations
+
+    @discardableResult
+    public func addChain(title: String, steps: [Chain.Step], group: String? = nil) -> Chain? {
+        do {
+            let chain = try repository.addChain(title: title, steps: steps, group: group)
+            refreshFromDisk()
+            return chain
+        } catch {
+            reportFailure(error)
+            return nil
+        }
+    }
+
+    public func updateChain(id: UUID, title: String, steps: [Chain.Step]) {
+        do {
+            _ = try repository.updateChain(id: id, title: title, steps: steps)
+            refreshFromDisk()
+        } catch LibraryRepositoryError.chainNotFound {
+        } catch {
+            reportFailure(error)
+        }
+    }
+
+    // Routes by id: a prompt if one matches, then a chain, otherwise a skill.
     public func delete(id: UUID) {
         do {
             _ = try repository.deletePrompt(id: id)
             refreshFromDisk()
             return
         } catch LibraryRepositoryError.promptNotFound {
+        } catch {
+            reportFailure(error)
+            return
+        }
+        do {
+            _ = try repository.deleteChain(id: id)
+            refreshFromDisk()
+            return
+        } catch LibraryRepositoryError.chainNotFound {
         } catch {
             reportFailure(error)
             return
@@ -210,11 +247,14 @@ public final class LibraryStore {
         catch { reportFailure(error); return false }
     }
 
-    // Routes by id: move a prompt if one matches, else a skill.
+    // Routes by id: move a prompt if one matches, then a chain, else a skill.
     @discardableResult
     public func moveItem(id: UUID, toFolder folder: String?) -> Bool {
         do { try repository.movePrompt(id: id, toFolder: folder); refreshFromDisk(); return true }
         catch LibraryRepositoryError.promptNotFound {
+        } catch { reportFailure(error); return false }
+        do { try repository.moveChain(id: id, toFolder: folder); refreshFromDisk(); return true }
+        catch LibraryRepositoryError.chainNotFound {
         } catch { reportFailure(error); return false }
         do { try repository.moveSkill(id: id, toFolder: folder); refreshFromDisk(); return true }
         catch LibraryRepositoryError.skillNotFound {

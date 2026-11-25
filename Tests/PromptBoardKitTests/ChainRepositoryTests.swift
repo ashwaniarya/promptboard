@@ -124,4 +124,100 @@ struct ChainRepositoryTests {
 
         #expect(chains(try repository.load().items) == [chain])
     }
+
+    private func expectChainNotFound(_ id: UUID, _ body: () throws -> Void) {
+        do {
+            try body()
+            Issue.record("expected chainNotFound")
+        } catch LibraryRepositoryError.chainNotFound(let missing) {
+            #expect(missing == id)
+        } catch {
+            Issue.record("unexpected \(error)")
+        }
+    }
+
+    @Test func addChainWritesKindChainFile() throws {
+        let directory = temporaryDirectory()
+        let repository = LibraryRepository(directoryURL: directory, syncTargets: .temporary())
+        let steps: [Chain.Step] = [.linked(promptID: UUID()), .custom(text: "review")]
+
+        let chain = try repository.addChain(title: "Ship", steps: steps)
+
+        let text = try String(contentsOf: repository.promptsDirectoryURL.appendingPathComponent("ship.md"), encoding: .utf8)
+        #expect(text.contains("kind: chain"))
+        #expect(text.contains("- @"))
+        #expect(chains(try repository.load().items).first { $0.id == chain.id }?.steps == steps)
+    }
+
+    @Test func addChainSlugAvoidsPromptCollision() throws {
+        let repository = LibraryRepository(directoryURL: temporaryDirectory(), syncTargets: .temporary())
+        _ = try repository.addPrompt(title: "Review", content: "x")
+
+        _ = try repository.addChain(title: "Review", steps: [])
+
+        let url = repository.promptsDirectoryURL.appendingPathComponent("review-2.md")
+        #expect(try String(contentsOf: url, encoding: .utf8).contains("kind: chain"))
+    }
+
+    @Test func updateChainRewritesStepsAndBumpsUpdatedAt() throws {
+        let repository = LibraryRepository(directoryURL: temporaryDirectory(), syncTargets: .temporary())
+        let original = try repository.addChain(title: "Ship", steps: [.custom(text: "a")])
+        let newSteps: [Chain.Step] = [.custom(text: "b"), .linked(promptID: UUID())]
+
+        _ = try repository.updateChain(id: original.id, title: "Ship it", steps: newSteps)
+
+        let loaded = try #require(chains(try repository.load().items).first)
+        #expect(loaded.steps == newSteps)
+        #expect(loaded.title == "Ship it")
+        #expect(loaded.updatedAt > original.updatedAt)
+        #expect(CanonicalJSON.isoString(from: loaded.createdAt) == CanonicalJSON.isoString(from: original.createdAt))
+    }
+
+    @Test func deleteChainKeepsLinkedPrompt() throws {
+        let repository = LibraryRepository(directoryURL: temporaryDirectory(), syncTargets: .temporary())
+        let prompt = try repository.addPrompt(title: "Spec", content: "write it")
+        let chain = try repository.addChain(title: "Ship", steps: [.linked(promptID: prompt.id)])
+
+        _ = try repository.deleteChain(id: chain.id)
+
+        let promptsDir = repository.promptsDirectoryURL
+        #expect(!FileManager.default.fileExists(atPath: promptsDir.appendingPathComponent("ship.md").path))
+        #expect(FileManager.default.fileExists(atPath: promptsDir.appendingPathComponent("spec.md").path))
+    }
+
+    @Test func moveChainRelocatesIntoFolder() throws {
+        let repository = LibraryRepository(directoryURL: temporaryDirectory(), syncTargets: .temporary())
+        let chain = try repository.addChain(title: "Ship", steps: [])
+
+        try repository.moveChain(id: chain.id, toFolder: "Work")
+
+        #expect(chains(try repository.load().items).first?.group == "Work")
+    }
+
+    @Test func unknownChainIDThrowsChainNotFound() throws {
+        let repository = LibraryRepository(directoryURL: temporaryDirectory(), syncTargets: .temporary())
+        let ghost = UUID()
+
+        expectChainNotFound(ghost) { _ = try repository.updateChain(id: ghost, title: "x", steps: []) }
+        expectChainNotFound(ghost) { _ = try repository.deleteChain(id: ghost) }
+        expectChainNotFound(ghost) { try repository.moveChain(id: ghost, toFolder: "Work") }
+    }
+
+    @Test @MainActor func storeDeleteRoutesToChain() throws {
+        let store = LibraryStore(directoryURL: temporaryDirectory(), syncTargets: .temporary())
+        let chain = try #require(store.addChain(title: "Ship", steps: [.custom(text: "a")]))
+        #expect(store.chains.contains { $0.id == chain.id })
+
+        store.delete(id: chain.id)
+
+        #expect(!store.chains.contains { $0.id == chain.id })
+    }
+
+    @Test @MainActor func storeMoveItemRoutesToChain() throws {
+        let store = LibraryStore(directoryURL: temporaryDirectory(), syncTargets: .temporary())
+        let chain = try #require(store.addChain(title: "Ship", steps: []))
+
+        #expect(store.moveItem(id: chain.id, toFolder: "Work"))
+        #expect(store.chains.first { $0.id == chain.id }?.group == "Work")
+    }
 }
