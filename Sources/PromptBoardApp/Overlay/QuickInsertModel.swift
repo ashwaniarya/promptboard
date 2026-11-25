@@ -41,6 +41,10 @@ final class QuickInsertModel {
         )
     }
 
+    func progressView(for chain: Chain) -> ChainProgressView {
+        ChainProgressView(stepList: stepList(for: chain))
+    }
+
     func reset() {
         query = ""
         selectedIndex = 0

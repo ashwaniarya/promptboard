@@ -28,6 +28,7 @@ enum DebugHooks {
     static let dumpFolderTreeNotification = "com.arya.PromptBoard.debug.dumpFolderTree"
     static let chainPickNotification = "com.arya.PromptBoard.debug.chainPick"
     static let newChainNotification = "com.arya.PromptBoard.debug.newChain"
+    static let chainStateNotification = "com.arya.PromptBoard.debug.chainState"
 
     static var isEnabled: Bool {
         ProcessInfo.processInfo.environment["PROMPTBOARD_DEBUG"] == "1"
@@ -71,6 +72,7 @@ enum DebugHooks {
             (dumpFolderTreeNotification, #selector(DebugHookTarget.handleDumpFolderTree(_:))),
             (chainPickNotification, #selector(DebugHookTarget.handleChainPick(_:))),
             (newChainNotification, #selector(DebugHookTarget.handleNewChain(_:))),
+            (chainStateNotification, #selector(DebugHookTarget.handleChainState(_:))),
         ]
         for (name, selector) in hooks {
             center.addObserver(
@@ -252,6 +254,28 @@ private final class DebugHookTarget: NSObject {
         let step = parts.count > 1 ? Int(parts[1]) ?? 0 : 0
         MainActor.assumeIsolated {
             quickInsertController.debugPickStep(query: query, step: step)
+        }
+    }
+
+    @objc nonisolated func handleChainState(_ notification: Notification) {
+        let query = notification.object as? String ?? ""
+        MainActor.assumeIsolated {
+            let model = quickInsertController.model
+            model.query = query
+            guard let chain = model.results.lazy.compactMap({ if case .chain(let chain) = $0 { chain } else { nil } }).first else {
+                NSLog("%@", "PromptBoardDebug chainState: no chain for \(query)")
+                return
+            }
+            let progress = model.progressView(for: chain)
+            let letters = progress.segments.map { segment -> String in
+                switch segment {
+                case .done: "d"
+                case .current: "c"
+                case .upcoming: "u"
+                case .missing: "m"
+                }
+            }
+            NSLog("%@", "PromptBoardDebug chainState chain=\(chain.title) segments=\(letters.joined(separator: ",")) continuous=\(progress.usesContinuousBar) next=\(progress.nextPreview ?? "-")")
         }
     }
 

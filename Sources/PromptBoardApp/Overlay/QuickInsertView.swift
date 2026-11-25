@@ -56,24 +56,25 @@ struct QuickInsertView: View {
 
     private func row(_ entry: LibraryEntry, index: Int) -> some View {
         let selected = index == model.selectedIndex
-        let emptyChain: Bool
-        let subtitle: String
-        switch entry {
-        case .chain(let chain):
-            emptyChain = model.stepList(for: chain).isEmpty
-            subtitle = emptyChain ? "no steps" : "\(chain.steps.count) steps"
-        default:
-            emptyChain = false
-            subtitle = entry.previewText.replacingOccurrences(of: "\n", with: " ")
-        }
+        var progress: ChainProgressView?
+        if case .chain(let chain) = entry { progress = model.progressView(for: chain) }
+        let emptyChain = progress?.isEmpty ?? false
         return HStack(spacing: 10) {
             Image(systemName: entry.kind == .chain ? "list.number" : "doc.text")
                 .font(.system(size: 13)).frame(width: 16)
                 .foregroundStyle(selected ? accent : Color.white.opacity(0.55))
             VStack(alignment: .leading, spacing: 1) {
                 Text(entry.title).font(.system(size: 13, weight: .medium)).lineLimit(1)
-                Text(subtitle)
-                    .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                if let progress, !progress.isEmpty {
+                    progressBar(progress).padding(.vertical, 3)
+                    if selected {
+                        Text(progress.isDone ? "All \(progress.stepCount) done · ⏎ restarts" : "Next: \(progress.nextPreview ?? "")")
+                            .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                } else {
+                    Text(emptyChain ? "no steps" : entry.previewText.replacingOccurrences(of: "\n", with: " "))
+                        .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                }
             }
             Spacer(minLength: 6)
             Text("/\(Slug.make(from: entry.title))")
@@ -88,6 +89,35 @@ struct QuickInsertView: View {
         .onTapGesture {
             model.selectedIndex = index
             onActivate()
+        }
+    }
+
+    private func progressBar(_ progress: ChainProgressView) -> some View {
+        let doneColor = Color.green.opacity(0.85)
+        let upcomingColor = Color.white.opacity(0.13)
+        return Group {
+            if progress.usesContinuousBar {
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 1.5).fill(upcomingColor)
+                        RoundedRectangle(cornerRadius: 1.5).fill(doneColor)
+                            .frame(width: geometry.size.width * CGFloat(progress.completedCount) / CGFloat(progress.stepCount))
+                    }
+                }
+                .frame(height: 3)
+            } else {
+                HStack(spacing: 2) {
+                    ForEach(Array(progress.segments.enumerated()), id: \.offset) { _, segment in
+                        switch segment {
+                        case .done: RoundedRectangle(cornerRadius: 1.5).fill(doneColor).frame(height: 3)
+                        case .current: RoundedRectangle(cornerRadius: 1.5).fill(accent).frame(height: 3)
+                        case .upcoming: RoundedRectangle(cornerRadius: 1.5).fill(upcomingColor).frame(height: 3)
+                        case .missing: Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
+                        }
+                    }
+                }
+                .frame(height: 3)
+            }
         }
     }
 
