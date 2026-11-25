@@ -25,6 +25,18 @@ public final class LibraryStore {
         items.compactMap { if case .prompt(let prompt) = $0 { prompt } else { nil } }
     }
 
+    public func stepList(for chain: Chain) -> ChainStepList {
+        ChainStepList(
+            chain: chain, prompts: prompts,
+            progressIndex: chainProgress.index(for: chain.id, stepCount: chain.steps.count)
+        )
+    }
+
+    public func restartChain(_ chain: Chain) throws -> ChainStepList {
+        try chainProgress.reset(for: chain.id)
+        return stepList(for: chain)
+    }
+
     public var chains: [Chain] {
         items.compactMap { if case .chain(let chain) = $0 { chain } else { nil } }
     }

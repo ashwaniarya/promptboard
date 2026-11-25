@@ -103,6 +103,13 @@ struct ChainProgressTests {
 
         #expect(!before.isEmpty)
         #expect(libraryFileDates() == before)
+
+        try store.chainProgress.setIndex(2, for: chain.id)
+        let restarted = try store.restartChain(chain)
+
+        #expect(restarted.selectedIndex == 0)
+        #expect(store.chainProgress.index(for: chain.id, stepCount: 2) == 0)
+        #expect(libraryFileDates() == before)
     }
 
     @Test func stateFileIsOutsideLibraryDirectory() {

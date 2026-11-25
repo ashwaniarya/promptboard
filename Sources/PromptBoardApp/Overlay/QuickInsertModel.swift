@@ -65,10 +65,7 @@ final class QuickInsertModel {
 
     func stepList(for chain: Chain) -> ChainStepList {
         _ = progressRevision
-        return ChainStepList(
-            chain: chain, prompts: store.prompts,
-            progressIndex: store.chainProgress.index(for: chain.id, stepCount: chain.steps.count)
-        )
+        return store.stepList(for: chain)
     }
 
     func progressView(for chain: Chain) -> ChainProgressView {
@@ -159,12 +156,12 @@ final class QuickInsertModel {
     func restart() {
         guard let chain = stepList?.chain else { return }
         do {
-            try store.chainProgress.reset(for: chain.id)
+            stepList = try store.restartChain(chain)
         } catch {
             NSLog("%@", "PromptBoard: could not reset chain progress: \(error)")
+            stepList = stepList(for: chain)
         }
         progressRevision += 1
-        stepList = stepList(for: chain)
     }
 
     private func saveProgress(_ index: Int, for chain: Chain) {
