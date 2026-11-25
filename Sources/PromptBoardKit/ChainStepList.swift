@@ -27,7 +27,9 @@ public struct ChainStepList: Equatable, Sendable {
                 guard let prompt = promptsByID[promptID] else { return .missing }
                 return .ready(title: prompt.title, text: prompt.content)
             case .custom(let text):
-                let firstLine = text.split(separator: "\n", omittingEmptySubsequences: true).first.map(String.init) ?? ""
+                // isNewline, not "\n": Swift keeps "\r\n" as one Character that never equals "\n".
+                let firstLine = text.split(whereSeparator: \.isNewline)
+                    .first { !$0.allSatisfy(\.isWhitespace) }.map(String.init) ?? ""
                 return .ready(title: firstLine, text: text)
             }
         }

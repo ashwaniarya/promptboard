@@ -108,7 +108,7 @@ struct QuickInsertView: View {
                 ForEach(Array(model.results.enumerated()), id: \.element.id) { index, entry in
                     row(entry, index: index)
                 }
-                if case .chain? = model.selected {
+                if case .chain(let chain)? = model.selected, !model.progressView(for: chain).isEmpty {
                     Text("⏎ paste next · → open steps · ⇥ switch tab")
                         .font(.system(size: 10)).foregroundStyle(.tertiary)
                         .frame(maxWidth: .infinity, alignment: .center)
