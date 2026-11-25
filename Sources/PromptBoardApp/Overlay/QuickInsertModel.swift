@@ -87,8 +87,7 @@ final class QuickInsertModel {
                 saveProgress(nextIndex, for: stepList.chain)
                 return text
             case .restart:
-                saveProgress(0, for: stepList.chain)
-                self.stepList = self.stepList(for: stepList.chain)
+                restart()
                 return nil
             case .nothing:
                 return nil
@@ -104,6 +103,16 @@ final class QuickInsertModel {
         case .skill, nil:
             return nil
         }
+    }
+
+    func restart() {
+        guard let chain = stepList?.chain else { return }
+        do {
+            try store.chainProgress.reset(for: chain.id)
+        } catch {
+            NSLog("%@", "PromptBoard: could not reset chain progress: \(error)")
+        }
+        stepList = stepList(for: chain)
     }
 
     private func saveProgress(_ index: Int, for chain: Chain) {

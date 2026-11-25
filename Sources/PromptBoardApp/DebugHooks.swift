@@ -29,6 +29,7 @@ enum DebugHooks {
     static let chainPickNotification = "com.arya.PromptBoard.debug.chainPick"
     static let newChainNotification = "com.arya.PromptBoard.debug.newChain"
     static let chainStateNotification = "com.arya.PromptBoard.debug.chainState"
+    static let chainRestartNotification = "com.arya.PromptBoard.debug.chainRestart"
 
     static var isEnabled: Bool {
         ProcessInfo.processInfo.environment["PROMPTBOARD_DEBUG"] == "1"
@@ -73,6 +74,7 @@ enum DebugHooks {
             (chainPickNotification, #selector(DebugHookTarget.handleChainPick(_:))),
             (newChainNotification, #selector(DebugHookTarget.handleNewChain(_:))),
             (chainStateNotification, #selector(DebugHookTarget.handleChainState(_:))),
+            (chainRestartNotification, #selector(DebugHookTarget.handleChainRestart(_:))),
         ]
         for (name, selector) in hooks {
             center.addObserver(
@@ -276,6 +278,23 @@ private final class DebugHookTarget: NSObject {
                 }
             }
             NSLog("%@", "PromptBoardDebug chainState chain=\(chain.title) segments=\(letters.joined(separator: ",")) continuous=\(progress.usesContinuousBar) next=\(progress.nextPreview ?? "-")")
+        }
+    }
+
+    @objc nonisolated func handleChainRestart(_ notification: Notification) {
+        let query = notification.object as? String ?? ""
+        MainActor.assumeIsolated {
+            let model = quickInsertController.model
+            model.query = query
+            model.selectedIndex = 0
+            guard case .chain(let chain)? = model.selected else {
+                NSLog("%@", "PromptBoardDebug chainRestart: no chain for \(query)")
+                return
+            }
+            _ = model.activate()
+            model.restart()
+            let stored = appState.store.chainProgress.index(for: chain.id, stepCount: chain.steps.count)
+            NSLog("%@", "PromptBoardDebug chainRestart chain=\(chain.title) index=\(stored) selected=\(model.stepList?.selectedIndex.map(String.init) ?? "nil") open=\(model.stepList != nil)")
         }
     }
 
