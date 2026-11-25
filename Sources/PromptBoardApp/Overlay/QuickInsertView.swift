@@ -288,13 +288,13 @@ struct QuickInsertView: View {
             Rectangle().fill(.white.opacity(0.08)).frame(height: 1)
             VStack(spacing: 2) {
                 if draft.steps.isEmpty {
-                    Text("No steps yet")
+                    Text("Type to search a prompt, ⏎ to add · ⌘⏎ adds custom text")
                         .font(.system(size: 12)).foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.vertical, 10)
                 }
                 ForEach(Array(draft.steps.enumerated()), id: \.offset) { index, step in
-                    draftStepRow(step, index: index, selected: index == draft.selectedStep)
+                    draftStepRow(step, index: index, selected: index == draft.selectedStep, stepCount: draft.steps.count)
                 }
             }
             .padding(6)
@@ -319,14 +319,14 @@ struct QuickInsertView: View {
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.bottom, 4)
             }
-            Text("⏎ add · ⌘⏎ custom · ⌥↑↓ move · ⌘⌫ remove · ⌘S save · esc cancel")
+            Text("⏎ add · ⌘⏎ custom · ⌥↑↓ move · ⌘⌫ remove · ⌘S save · esc/Back discard")
                 .font(.system(size: 10)).foregroundStyle(.tertiary)
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.vertical, 6)
         }
     }
 
-    private func draftStepRow(_ step: Chain.Step, index: Int, selected: Bool) -> some View {
+    private func draftStepRow(_ step: Chain.Step, index: Int, selected: Bool, stepCount: Int) -> some View {
         HStack(spacing: 10) {
             Text("\(index + 1)")
                 .font(.system(size: 9, design: .monospaced))
@@ -350,12 +350,34 @@ struct QuickInsertView: View {
                 .textFieldStyle(.plain).font(.system(size: 13)).lineLimit(1...4)
             }
             Spacer(minLength: 6)
+            stepControl("chevron.up", index: index, help: "Move up (⌥↑)", hidden: index == 0) { $0.moveSelectedStep(by: -1) }
+            stepControl("chevron.down", index: index, help: "Move down (⌥↓)", hidden: index == stepCount - 1) { $0.moveSelectedStep(by: 1) }
+            stepControl("xmark", index: index, help: "Remove step (⌘⌫)") { $0.removeSelectedStep() }
         }
         .foregroundStyle(selected ? Color.white : Color.white.opacity(0.82))
         .padding(.horizontal, 10).padding(.vertical, 7)
         .background(RoundedRectangle(cornerRadius: 8).fill(selected ? accent.opacity(0.20) : .clear))
         .contentShape(Rectangle())
         .onTapGesture { model.updateChainDraft { $0.selectStep(index) } }
+    }
+
+    private func stepControl(_ symbol: String, index: Int, help: String, hidden: Bool = false,
+                             action: @escaping (inout ChainDraft) -> Void) -> some View {
+        Button {
+            model.updateChainDraft { draft in
+                draft.selectStep(index)
+                action(&draft)
+            }
+        } label: {
+            Image(systemName: symbol).font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(0.55))
+                .frame(width: 18, height: 18)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .opacity(hidden ? 0 : 1)
+        .disabled(hidden)
     }
 
     private func pickerRow(_ row: ChainDraft.PickerRow, index: Int, selected: Bool) -> some View {
