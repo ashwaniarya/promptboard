@@ -32,6 +32,7 @@ final class QuickInsertModel {
     private(set) var chainSaveError: String?
     private(set) var promptDraft: PromptDraft?
     private(set) var promptSaveError: String?
+    private(set) var pendingDelete: LibraryEntry?
     // chain-state.json is not observable; bumping this redraws rows that read progress.
     private var progressRevision = 0
 
@@ -92,6 +93,7 @@ final class QuickInsertModel {
         chainSaveError = nil
         promptDraft = nil
         promptSaveError = nil
+        pendingDelete = nil
     }
 
     func moveDown() {
@@ -237,6 +239,27 @@ final class QuickInsertModel {
             return false
         }
         return true
+    }
+
+    func beginDeleteSelected() -> Bool {
+        guard stepList == nil, let entry = selected, entry.kind != .skill else { return false }
+        pendingDelete = entry
+        return true
+    }
+
+    func cancelDelete() {
+        pendingDelete = nil
+    }
+
+    func confirmDelete() {
+        guard let entry = pendingDelete else { return }
+        pendingDelete = nil
+        store.delete(id: entry.id, movingToTrash: true)
+        selectedIndex = min(selectedIndex, max(results.count - 1, 0))
+    }
+
+    func chainCount(linking promptID: UUID) -> Int {
+        store.chainCount(linking: promptID)
     }
 
     func cancelChainDraft() {

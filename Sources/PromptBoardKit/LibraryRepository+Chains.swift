@@ -32,16 +32,12 @@ extension LibraryRepository {
     }
 
     @discardableResult
-    public func deleteChain(id: UUID) throws -> Chain {
+    public func deleteChain(id: UUID, movingToTrash: Bool = false) throws -> Chain {
         try withExclusiveLock {
             guard let found = try findChainFile(id: id) else {
                 throw LibraryRepositoryError.chainNotFound(id)
             }
-            do {
-                try FileManager.default.removeItem(at: found.url)
-            } catch {
-                throw LibraryRepositoryError.ioFailure(underlying: error)
-            }
+            try removeFile(at: found.url, movingToTrash: movingToTrash)
             return found.chain
         }
     }

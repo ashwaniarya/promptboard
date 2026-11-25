@@ -185,6 +185,36 @@ struct ChainRepositoryTests {
         #expect(FileManager.default.fileExists(atPath: promptsDir.appendingPathComponent("spec.md").path))
     }
 
+    @Test func deleteMovingToTrashLeavesFileInTrash() throws {
+        let repository = LibraryRepository(directoryURL: temporaryDirectory(), syncTargets: .temporary())
+        let marker = "trash-test-\(UUID().uuidString.lowercased())"
+        let prompt = try repository.addPrompt(title: marker + "-prompt", content: "x")
+        let chain = try repository.addChain(title: marker + "-chain", steps: [.linked(promptID: prompt.id)])
+
+        _ = try repository.deletePrompt(id: prompt.id, movingToTrash: true)
+        _ = try repository.deleteChain(id: chain.id, movingToTrash: true)
+
+        #expect(try repository.load().items.isEmpty)
+        let trash = try FileManager.default.url(for: .trashDirectory, in: .userDomainMask, appropriateFor: nil, create: false)
+        for name in [marker + "-chain.md", marker + "-prompt.md"] {
+            let trashed = trash.appendingPathComponent(name)
+            #expect(FileManager.default.fileExists(atPath: trashed.path))
+            try? FileManager.default.removeItem(at: trashed)
+        }
+    }
+
+    @Test @MainActor func chainCountLinkingCountsEachChainOnce() throws {
+        let store = LibraryStore(directoryURL: temporaryDirectory(), syncTargets: .temporary())
+        let spec = store.add(title: "Spec", content: "write it")
+        let unused = store.add(title: "Unused", content: "x")
+        _ = store.addChain(title: "Ship", steps: [.linked(promptID: spec.id), .linked(promptID: spec.id)])
+        _ = store.addChain(title: "Review", steps: [.custom(text: "a"), .linked(promptID: spec.id)])
+        _ = store.addChain(title: "Other", steps: [.custom(text: "b")])
+
+        #expect(store.chainCount(linking: spec.id) == 2)
+        #expect(store.chainCount(linking: unused.id) == 0)
+    }
+
     @Test func moveChainRelocatesIntoFolder() throws {
         let repository = LibraryRepository(directoryURL: temporaryDirectory(), syncTargets: .temporary())
         let chain = try repository.addChain(title: "Ship", steps: [])

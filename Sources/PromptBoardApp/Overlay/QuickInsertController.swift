@@ -178,6 +178,11 @@ final class QuickInsertController {
         focusField(placeholder: QuickInsertView.searchPlaceholder)
     }
 
+    func leaveDeleteConfirm(deleting: Bool) {
+        if deleting { model.confirmDelete() } else { model.cancelDelete() }
+        focusField(placeholder: QuickInsertView.searchPlaceholder)
+    }
+
     private func editSelected() {
         guard model.beginEditSelected() else { return }
         if model.chainDraft != nil { focusChainEditor() } else { focusPromptEditor() }
@@ -263,7 +268,10 @@ final class QuickInsertController {
                 model: model,
                 onActivate: { [weak self] in self?.activateSelected() },
                 onEdit: { [weak self] in self?.editSelected() },
-                onBack: { [weak self] in self?.backToList() }
+                onBack: { [weak self] in self?.backToList() },
+                onDelete: { [weak self] in _ = self?.model.beginDeleteSelected() },
+                onConfirmDelete: { [weak self] in self?.leaveDeleteConfirm(deleting: true) },
+                onCancelDelete: { [weak self] in self?.leaveDeleteConfirm(deleting: false) }
             )
         )
         self.panel = panel
@@ -335,8 +343,18 @@ final class QuickInsertController {
                     default: return false
                     }
                 }
+                if self.model.pendingDelete != nil {
+                    switch keyCode {
+                    case 36, 76: self.leaveDeleteConfirm(deleting: true)
+                    case 53: self.leaveDeleteConfirm(deleting: false)
+                    default: break
+                    }
+                    return true
+                }
                 let inPromptList = self.model.tab == .prompts && self.model.stepList == nil
                 switch keyCode {
+                case 51 where inPromptList && chordFlags == .command:
+                    return self.model.beginDeleteSelected()
                 case _ where inPromptList && chordFlags == .command && character == "e":
                     self.editSelected()
                     return true

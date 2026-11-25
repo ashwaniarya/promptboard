@@ -41,6 +41,10 @@ public final class LibraryStore {
         items.compactMap { if case .chain(let chain) = $0 { chain } else { nil } }
     }
 
+    public func chainCount(linking promptID: UUID) -> Int {
+        chains.filter { $0.steps.contains(.linked(promptID: promptID)) }.count
+    }
+
     public var groups: [String] {
         var seen = Set<String>()
         var ordered: [String] = []
@@ -130,10 +134,10 @@ public final class LibraryStore {
         return chains.first { $0.id == chainID }
     }
 
-    // Routes by id: a prompt if one matches, then a chain, otherwise a skill.
-    public func delete(id: UUID) {
+    // Routes by id: a prompt if one matches, then a chain, otherwise a skill. Skills are never trashed.
+    public func delete(id: UUID, movingToTrash: Bool = false) {
         do {
-            _ = try repository.deletePrompt(id: id)
+            _ = try repository.deletePrompt(id: id, movingToTrash: movingToTrash)
             refreshFromDisk()
             return
         } catch LibraryRepositoryError.promptNotFound {
@@ -142,7 +146,7 @@ public final class LibraryStore {
             return
         }
         do {
-            _ = try repository.deleteChain(id: id)
+            _ = try repository.deleteChain(id: id, movingToTrash: movingToTrash)
             refreshFromDisk()
             return
         } catch LibraryRepositoryError.chainNotFound {
