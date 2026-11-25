@@ -9,6 +9,9 @@ struct QuickInsertView: View {
     let onActivate: () -> Void
     let onEdit: () -> Void
     let onBack: () -> Void
+    let onDelete: () -> Void
+    let onConfirmDelete: () -> Void
+    let onCancelDelete: () -> Void
 
     static let searchPlaceholder = "insert a prompt…"
     static let chainTitlePlaceholder = "Chain title"
@@ -22,6 +25,8 @@ struct QuickInsertView: View {
                 chainEditor(draft)
             } else if model.promptDraft != nil {
                 promptEditor
+            } else if let entry = model.pendingDelete {
+                deleteConfirm(entry)
             } else {
                 searchField
                 tabStrip
@@ -124,9 +129,9 @@ struct QuickInsertView: View {
                 createRow("New prompt", shortcut: "⌘⇧N", index: model.results.count + 1, selected: model.isNewPromptRowSelected)
                 Group {
                     if case .chain(let chain)? = model.selected, !model.progressView(for: chain).isEmpty {
-                        Text("⏎ paste next · → open steps · ⌘E edit · ⌘N new chain · ⌘⇧N new prompt")
+                        Text("⏎ paste next · → open steps · ⌘E edit · ⌘⌫ delete · ⌘N new chain · ⌘⇧N new prompt")
                     } else {
-                        Text("⇥ switch tab · ⌘E edit · ⌘N new chain · ⌘⇧N new prompt")
+                        Text("⇥ switch tab · ⌘E edit · ⌘⌫ delete · ⌘N new chain · ⌘⇧N new prompt")
                     }
                 }
                 .font(.system(size: 10)).foregroundStyle(.tertiary)
@@ -186,6 +191,11 @@ struct QuickInsertView: View {
                 .buttonStyle(.plain)
                 .help(entry.kind == .chain ? "Edit chain" : "Edit prompt")
                 .accessibilityLabel(entry.kind == .chain ? "Edit chain" : "Edit prompt")
+                StepControlButton(symbol: "trash", help: entry.kind == .chain ? "Delete chain (⌘⌫)" : "Delete prompt (⌘⌫)", hoverColor: .red) {
+                    model.selectedIndex = index
+                    onDelete()
+                }
+                .accessibilityLabel(entry.kind == .chain ? "Delete chain" : "Delete prompt")
             }
         }
         .foregroundStyle(selected ? Color.white : Color.white.opacity(0.82))
@@ -252,6 +262,51 @@ struct QuickInsertView: View {
                 .font(.system(size: 10)).foregroundStyle(.tertiary)
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.vertical, 6)
+        }
+    }
+
+    private func deleteConfirm(_ entry: LibraryEntry) -> some View {
+        let detail: String?
+        switch entry {
+        case .chain(let chain):
+            detail = "This chain has \(chain.steps.count) \(chain.steps.count == 1 ? "step" : "steps"). Linked prompts stay."
+        case .prompt(let prompt):
+            let usage = model.chainCount(linking: prompt.id)
+            detail = usage == 0 ? nil : "Used in \(usage) \(usage == 1 ? "chain" : "chains")."
+        case .skill:
+            detail = nil
+        }
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Image(systemName: "trash").foregroundStyle(.red)
+                Text("Delete \"\(entry.title)\"?").font(.system(size: 14, weight: .semibold)).lineLimit(1)
+            }
+            .padding(.horizontal, 15).padding(.top, 14).padding(.bottom, 8)
+            VStack(alignment: .leading, spacing: 4) {
+                if let detail { Text(detail) }
+                Text("Moves the file to Trash.")
+            }
+            .font(.system(size: 12)).foregroundStyle(.secondary)
+            .padding(.horizontal, 15)
+            HStack(spacing: 8) {
+                Spacer()
+                Button("Cancel", action: onCancelDelete)
+                    .buttonStyle(.borderless)
+                    .padding(.horizontal, 12).padding(.vertical, 5)
+                    .background(Capsule().fill(.white.opacity(0.08)))
+                Button(action: onConfirmDelete) {
+                    Text("Delete").font(.system(size: 12, weight: .semibold)).foregroundStyle(.white)
+                        .padding(.horizontal, 12).padding(.vertical, 5)
+                        .background(Capsule().fill(Color.red.opacity(0.85)))
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.borderless)
+            }
+            .padding(.horizontal, 15).padding(.vertical, 12)
+            Text("⏎ delete · esc cancel")
+                .font(.system(size: 10)).foregroundStyle(.tertiary)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.bottom, 6)
         }
     }
 

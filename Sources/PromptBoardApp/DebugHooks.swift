@@ -373,7 +373,7 @@ private final class DebugHookTarget: NSObject {
     }
 
     // Object is "verb:arg": query:<text>, up, down, enter (activates the row without inserting), new,
-    // title:<text>, text:<text>, save, cancel, dump. Logs list rows or the open draft after.
+    // title:<text>, text:<text>, save, cancel, delete, confirmDelete, cancelDelete, dump. Logs list rows or the open draft after.
     @objc nonisolated func handlePromptEditor(_ notification: Notification) {
         let command = notification.object as? String ?? "dump"
         let verb = command.prefix { $0 != ":" }
@@ -399,9 +399,14 @@ private final class DebugHookTarget: NSObject {
             case "save": NSLog("%@", "PromptBoardDebug promptEditor saved=\(model.savePromptDraft())")
             case "cancel": model.cancelPromptDraft()
             case "back": quickInsertController.backToList()
+            case "delete": NSLog("%@", "PromptBoardDebug promptEditor delete began=\(model.beginDeleteSelected())")
+            case "confirmDelete": quickInsertController.leaveDeleteConfirm(deleting: true)
+            case "cancelDelete": quickInsertController.leaveDeleteConfirm(deleting: false)
             default: break
             }
-            if let draft = model.promptDraft {
+            if let entry = model.pendingDelete {
+                NSLog("%@", "PromptBoardDebug promptEditor \(command) -> deleteConfirm id=\(entry.id.uuidString) title=\(entry.title) kind=\(entry.kind.rawValue)")
+            } else if let draft = model.promptDraft {
                 NSLog("%@", "PromptBoardDebug promptEditor \(command) -> promptDraft id=\(draft.promptID?.uuidString ?? "new") title=\(draft.title) text=\(draft.content.debugDescription) canSave=\(draft.canSave) error=\(model.promptSaveError ?? "-")")
             } else if let draft = model.chainDraft {
                 NSLog("%@", "PromptBoardDebug promptEditor \(command) -> chainDraft title=\(draft.title) steps=\(draft.steps.count)")

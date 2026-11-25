@@ -119,17 +119,25 @@ public struct LibraryRepository: Sendable {
     }
 
     @discardableResult
-    public func deletePrompt(id: UUID) throws -> Prompt {
+    public func deletePrompt(id: UUID, movingToTrash: Bool = false) throws -> Prompt {
         try withExclusiveLock {
             guard let found = try findPromptFile(id: id) else {
                 throw LibraryRepositoryError.promptNotFound(id)
             }
-            do {
-                try FileManager.default.removeItem(at: found.url)
-            } catch {
-                throw LibraryRepositoryError.ioFailure(underlying: error)
-            }
+            try removeFile(at: found.url, movingToTrash: movingToTrash)
             return found.prompt
+        }
+    }
+
+    func removeFile(at url: URL, movingToTrash: Bool) throws {
+        do {
+            if movingToTrash {
+                try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+            } else {
+                try FileManager.default.removeItem(at: url)
+            }
+        } catch {
+            throw LibraryRepositoryError.ioFailure(underlying: error)
         }
     }
 
