@@ -209,7 +209,7 @@ final class QuickInsertModel {
         }
         self.chainDraft = nil
         chainSaveError = nil
-        query = ""
+        query = saved.title
         selectedIndex = results.firstIndex { $0.id == saved.id } ?? 0
         return true
     }
