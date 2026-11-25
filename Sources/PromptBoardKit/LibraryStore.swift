@@ -12,6 +12,7 @@ public final class LibraryStore {
     public private(set) var externalItems: [ExternalItem] = []
 
     private let repository: LibraryRepository
+    public let chainProgress: ChainProgress
     private var lastSignature = ""
     @ObservationIgnored private var watchers: [DirectoryChangeWatcher] = []
     @ObservationIgnored private var pendingReloadTask: Task<Void, Never>?
@@ -40,6 +41,7 @@ public final class LibraryStore {
 
     public init(directoryURL: URL, syncTargets: SyncTargets) {
         repository = LibraryRepository(directoryURL: directoryURL, syncTargets: syncTargets)
+        chainProgress = ChainProgress(fileURL: repository.chainStateURL)
         loadInitial()
     }
 
@@ -307,6 +309,7 @@ public final class LibraryStore {
         }
         _ = try? repository.migrateGroupsToFoldersIfNeeded()
         refreshFromDisk()
+        do { try chainProgress.prune(keeping: Set(chains.map(\.id))) } catch { reportFailure(error) }
         refreshExternalItems()
     }
 
