@@ -11,12 +11,15 @@ struct QuickInsertView: View {
     static let searchPlaceholder = "insert a prompt…"
     static let chainTitlePlaceholder = "Chain title"
     static let stepSearchPlaceholder = "add a step: search prompts or type text…"
+    static let promptTitlePlaceholder = "Prompt title"
     private let accent = Color(red: 0.49, green: 0.51, blue: 1.0)
 
     var body: some View {
         VStack(spacing: 0) {
             if let draft = model.chainDraft {
                 chainEditor(draft)
+            } else if model.promptDraft != nil {
+                promptEditor
             } else {
                 searchField
                 tabStrip
@@ -115,7 +118,8 @@ struct QuickInsertView: View {
                 ForEach(Array(model.results.enumerated()), id: \.element.id) { index, entry in
                     row(entry, index: index)
                 }
-                newChainRow
+                createRow("New chain", shortcut: "⌘N", index: model.results.count, selected: model.isNewChainRowSelected)
+                createRow("New prompt", shortcut: "⌘⇧N", index: model.results.count + 1, selected: model.isNewPromptRowSelected)
                 Group {
                     if case .chain(let chain)? = model.selected, !model.progressView(for: chain).isEmpty {
                         Text("⏎ paste next · → open steps · ⌘E edit chain · ⌘N new chain")
@@ -178,23 +182,57 @@ struct QuickInsertView: View {
         }
     }
 
-    private var newChainRow: some View {
-        let selected = model.isNewChainRowSelected
+    private func createRow(_ label: String, shortcut: String, index: Int, selected: Bool) -> some View {
+        let typed = model.query.trimmingCharacters(in: .whitespacesAndNewlines)
         return HStack(spacing: 10) {
             Image(systemName: "plus")
                 .font(.system(size: 13)).frame(width: 16)
                 .foregroundStyle(selected ? accent : Color.white.opacity(0.55))
-            Text("New chain").font(.system(size: 13, weight: .medium))
+            Text(typed.isEmpty ? label : "\(label) \"\(typed)\"").font(.system(size: 13, weight: .medium)).lineLimit(1)
             Spacer(minLength: 6)
-            Text("⌘N").font(.system(size: 10, design: .monospaced)).foregroundStyle(Color.white.opacity(0.4))
+            Text(shortcut).font(.system(size: 10, design: .monospaced)).foregroundStyle(Color.white.opacity(0.4))
         }
         .foregroundStyle(selected ? Color.white : Color.white.opacity(0.65))
         .padding(.horizontal, 10).padding(.vertical, 7)
         .background(RoundedRectangle(cornerRadius: 8).fill(selected ? accent.opacity(0.20) : .clear))
         .contentShape(Rectangle())
         .onTapGesture {
-            model.selectedIndex = model.results.count
+            model.selectedIndex = index
             onActivate()
+        }
+    }
+
+    private var promptEditor: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Image(systemName: "doc.text").foregroundStyle(accent)
+                TextField(Self.promptTitlePlaceholder, text: Binding(
+                    get: { model.promptDraft?.title ?? "" },
+                    set: { title in model.updatePromptDraft { $0.title = title } }
+                ))
+                .textFieldStyle(.plain).font(.system(size: 14, weight: .semibold))
+                Spacer(minLength: 6)
+                Text("new prompt").font(.system(size: 10)).foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 15).padding(.vertical, 12)
+            Rectangle().fill(.white.opacity(0.08)).frame(height: 1)
+            TextEditor(text: Binding(
+                get: { model.promptDraft?.content ?? "" },
+                set: { content in model.updatePromptDraft { $0.content = content } }
+            ))
+            .font(.system(size: 13))
+            .scrollContentBackground(.hidden)
+            .frame(height: 160)
+            .padding(.horizontal, 10).padding(.vertical, 8)
+            if let error = model.promptSaveError {
+                Text(error).font(.system(size: 11)).foregroundStyle(.red.opacity(0.9))
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.bottom, 4)
+            }
+            Text("⌘S save · esc cancel")
+                .font(.system(size: 10)).foregroundStyle(.tertiary)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, 6)
         }
     }
 

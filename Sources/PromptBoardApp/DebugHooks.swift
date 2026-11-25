@@ -37,6 +37,7 @@ enum DebugHooks {
     static let pasteFirstClipNotification = "com.arya.PromptBoard.debug.pasteFirstClip"
     static let chainOpenStepsNotification = "com.arya.PromptBoard.debug.chainOpenSteps"
     static let chainEditorNotification = "com.arya.PromptBoard.debug.chainEditor"
+    static let promptEditorNotification = "com.arya.PromptBoard.debug.promptEditor"
 
     static var isEnabled: Bool {
         ProcessInfo.processInfo.environment["PROMPTBOARD_DEBUG"] == "1"
@@ -88,6 +89,7 @@ enum DebugHooks {
             (pasteFirstClipNotification, #selector(DebugHookTarget.handlePasteFirstClip(_:))),
             (chainOpenStepsNotification, #selector(DebugHookTarget.handleChainOpenSteps(_:))),
             (chainEditorNotification, #selector(DebugHookTarget.handleChainEditor(_:))),
+            (promptEditorNotification, #selector(DebugHookTarget.handlePromptEditor(_:))),
         ]
         for (name, selector) in hooks {
             center.addObserver(
@@ -367,6 +369,40 @@ private final class DebugHookTarget: NSObject {
             model.query = query
             model.selectedIndex = 0
             NSLog("%@", "PromptBoardDebug chainOpenSteps opened=\(model.openSteps())")
+        }
+    }
+
+    // Object is "verb:arg": query:<text>, up, down, enter (activates the row without inserting), new,
+    // title:<text>, text:<text>, save, cancel, dump. Logs list rows or the open draft after.
+    @objc nonisolated func handlePromptEditor(_ notification: Notification) {
+        let command = notification.object as? String ?? "dump"
+        let verb = command.prefix { $0 != ":" }
+        let argument = command.contains(":") ? String(command[command.index(after: command.firstIndex(of: ":")!)...]) : ""
+        MainActor.assumeIsolated {
+            if !quickInsertController.isVisible { quickInsertController.trigger() }
+            let model = quickInsertController.model
+            switch verb {
+            case "query":
+                model.query = argument
+                model.selectedIndex = 0
+            case "down": model.moveDown()
+            case "up": model.moveUp()
+            case "enter": _ = model.activate()
+            case "new": model.beginNewPrompt()
+            case "title": model.updatePromptDraft { $0.title = argument }
+            case "text": model.updatePromptDraft { $0.content = argument }
+            case "save": NSLog("%@", "PromptBoardDebug promptEditor saved=\(model.savePromptDraft())")
+            case "cancel": model.cancelPromptDraft()
+            default: break
+            }
+            if let draft = model.promptDraft {
+                NSLog("%@", "PromptBoardDebug promptEditor \(command) -> promptDraft title=\(draft.title) text=\(draft.content.debugDescription) canSave=\(draft.canSave) error=\(model.promptSaveError ?? "-")")
+            } else if let draft = model.chainDraft {
+                NSLog("%@", "PromptBoardDebug promptEditor \(command) -> chainDraft title=\(draft.title) steps=\(draft.steps.count)")
+            } else {
+                let rows = model.results.map(\.title) + ["New chain", "New prompt"]
+                NSLog("%@", "PromptBoardDebug promptEditor \(command) -> list query=\(model.query) rows=[\(rows.joined(separator: " | "))] selectedIndex=\(model.selectedIndex) newChain=\(model.isNewChainRowSelected) newPrompt=\(model.isNewPromptRowSelected) error=\(model.promptSaveError ?? "-")")
+            }
         }
     }
 

@@ -30,6 +30,8 @@ final class QuickInsertModel {
     private(set) var stepList: ChainStepList?
     private(set) var chainDraft: ChainDraft?
     private(set) var chainSaveError: String?
+    private(set) var promptDraft: PromptDraft?
+    private(set) var promptSaveError: String?
     // chain-state.json is not observable; bumping this redraws rows that read progress.
     private var progressRevision = 0
 
@@ -47,10 +49,12 @@ final class QuickInsertModel {
 
     var visibleCount: Int { tab == .prompts ? results.count : clipboardResults.count }
 
-    // The prompts tab ends with a "New chain" row one past the results.
-    private var navigableCount: Int { tab == .prompts ? results.count + 1 : clipboardResults.count }
+    // The prompts tab ends with "New chain" and "New prompt" rows past the results.
+    private var navigableCount: Int { tab == .prompts ? results.count + 2 : clipboardResults.count }
 
     var isNewChainRowSelected: Bool { tab == .prompts && stepList == nil && selectedIndex == results.count }
+
+    var isNewPromptRowSelected: Bool { tab == .prompts && stepList == nil && selectedIndex == results.count + 1 }
 
     var selected: LibraryEntry? {
         guard tab == .prompts else { return nil }
@@ -86,6 +90,8 @@ final class QuickInsertModel {
         stepList = nil
         chainDraft = nil
         chainSaveError = nil
+        promptDraft = nil
+        promptSaveError = nil
     }
 
     func moveDown() {
@@ -135,6 +141,10 @@ final class QuickInsertModel {
             beginNewChain()
             return nil
         }
+        if isNewPromptRowSelected {
+            beginNewPrompt()
+            return nil
+        }
         switch selected {
         case .prompt(let prompt):
             return prompt.content
@@ -180,7 +190,38 @@ final class QuickInsertModel {
     func beginNewChain() {
         stepList = nil
         chainSaveError = nil
-        chainDraft = ChainDraft()
+        chainDraft = ChainDraft(title: query)
+    }
+
+    func beginNewPrompt() {
+        stepList = nil
+        promptSaveError = nil
+        promptDraft = PromptDraft(title: query)
+    }
+
+    func cancelPromptDraft() {
+        promptDraft = nil
+        promptSaveError = nil
+    }
+
+    // Back to the list with the saved prompt selected; on failure the draft stays open.
+    @discardableResult
+    func savePromptDraft() -> Bool {
+        guard let promptDraft else { return false }
+        guard let saved = store.savePrompt(promptDraft) else {
+            promptSaveError = "Needs a title and some text."
+            return false
+        }
+        self.promptDraft = nil
+        promptSaveError = nil
+        query = saved.title
+        selectedIndex = results.firstIndex { $0.id == saved.id } ?? 0
+        return true
+    }
+
+    func updatePromptDraft(_ change: (inout PromptDraft) -> Void) {
+        guard promptDraft != nil else { return }
+        change(&promptDraft!)
     }
 
     func beginEditSelectedChain() -> Bool {

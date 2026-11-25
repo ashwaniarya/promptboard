@@ -133,12 +133,47 @@ final class QuickInsertController {
             insert(text)
         } else if model.chainDraft != nil {
             focusChainEditor()
+        } else if model.promptDraft != nil {
+            focusPromptEditor()
         }
     }
 
+    private func focusPromptEditor() {
+        if model.promptDraft?.title.isEmpty ?? true {
+            focusField(placeholder: QuickInsertView.promptTitlePlaceholder)
+            return
+        }
+        Task { @MainActor [weak self] in
+            for _ in 0..<10 {
+                try? await Task.sleep(for: .milliseconds(40))
+                guard let panel = self?.panel else { return }
+                if let textView = Self.collectTextViews(in: panel.contentView).first {
+                    panel.makeFirstResponder(textView)
+                    return
+                }
+            }
+        }
+    }
+
+    // A focused NSTextField hosts its field editor as a subview; only the TextEditor's view counts.
+    private static func collectTextViews(in view: NSView?) -> [NSTextView] {
+        guard let view else { return [] }
+        let own = (view as? NSTextView).map { $0.isFieldEditor || !$0.isEditable ? [] : [$0] } ?? []
+        return own + view.subviews.flatMap { collectTextViews(in: $0) }
+    }
+
+    private func leavePromptEditor(saving: Bool) {
+        if saving {
+            guard model.savePromptDraft() else { return }
+        } else {
+            model.cancelPromptDraft()
+        }
+        focusField(placeholder: QuickInsertView.searchPlaceholder)
+    }
+
     private func focusChainEditor() {
-        let isNew = model.chainDraft?.chainID == nil
-        focusField(placeholder: isNew ? QuickInsertView.chainTitlePlaceholder : QuickInsertView.stepSearchPlaceholder)
+        let needsTitle = model.chainDraft?.chainID == nil && model.chainDraft?.title.isEmpty ?? true
+        focusField(placeholder: needsTitle ? QuickInsertView.chainTitlePlaceholder : QuickInsertView.stepSearchPlaceholder)
     }
 
     private func leaveChainEditor(saving: Bool) {
@@ -276,6 +311,13 @@ final class QuickInsertController {
                 if self.model.chainDraft != nil {
                     return self.handleChainEditorKey(keyCode: keyCode, chordFlags: chordFlags, character: character)
                 }
+                if self.model.promptDraft != nil {
+                    switch keyCode {
+                    case 53: self.leavePromptEditor(saving: false); return true
+                    case _ where chordFlags == .command && character == "s": self.leavePromptEditor(saving: true); return true
+                    default: return false
+                    }
+                }
                 let inPromptList = self.model.tab == .prompts && self.model.stepList == nil
                 switch keyCode {
                 case _ where inPromptList && chordFlags == .command && character == "e":
@@ -284,6 +326,10 @@ final class QuickInsertController {
                 case _ where inPromptList && chordFlags == .command && character == "n":
                     self.model.beginNewChain()
                     self.focusChainEditor()
+                    return true
+                case _ where inPromptList && chordFlags == [.command, .shift] && character == "n":
+                    self.model.beginNewPrompt()
+                    self.focusPromptEditor()
                     return true
                 case _ where isCommandR && self.model.stepList != nil:
                     self.model.restart()
