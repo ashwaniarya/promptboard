@@ -23,7 +23,9 @@ struct OverlayRootView: View {
                 .padding(.trailing, 8)
             }
 
-            if let skillEditorMode = appState.skillEditorMode {
+            if let chainEditorMode = appState.chainEditorMode {
+                chainEditorLayer(chainEditorMode)
+            } else if let skillEditorMode = appState.skillEditorMode {
                 skillEditorLayer(skillEditorMode)
             } else if let editorMode = appState.editorMode {
                 editorLayer(editorMode)
@@ -181,6 +183,18 @@ struct OverlayRootView: View {
                 onCancel: { appState.adoptingItem = nil }
             )
             .id(item.id)
+        }
+        .transition(.opacity)
+    }
+
+    private func chainEditorLayer(_ mode: AppState.ChainEditorMode) -> some View {
+        ZStack {
+            Color.black.opacity(0.4)
+                .contentShape(Rectangle())
+                .onTapGesture { appState.chainEditorMode = nil }
+
+            ChainEditorView(mode: mode, appState: appState)
+                .id(ChainEditorView.identity(mode))
         }
         .transition(.opacity)
     }
